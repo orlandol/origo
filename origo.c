@@ -17,6 +17,21 @@
  *  String declarations
  */
 
+  typedef struct _string
+  {
+    size_t length;
+    char text[];
+  } string;
+
+  string* ReserveString( size_t length );
+  string* CopyString( char* strVal );
+  void FreeString( string** strVar );
+
+  string* AppendString( string* toString, char* fromVal );
+
+  int CaseCompare( string* left, string* right );
+  int Compare( string* left, string* right );
+
 /*
  *  Symbol table declarations
  */
@@ -99,6 +114,34 @@
 /*
  *  Code generator declarations
  */
+
+  typedef struct _x86InstructionBuffer
+  {
+    uint8_t fields;
+    uint8_t prefix[4];
+    uint8_t opcode[3];
+    uint8_t modRM;
+    uint8_t sib;
+    uint32_t displacement;
+    uint32_t immediate;
+  } x86InstructionBuffer;
+
+  typedef struct _x86Addr
+  {
+    unsigned fields;
+    unsigned baseReg;
+    unsigned indexReg;
+    unsigned scale;
+    int32_t  displacement;
+  } x86Addr;
+
+  int x86Emit( FILE* binFile, x86InstructionBuffer* instruction );
+
+  int x86EncodeAddr16( x86InstructionBuffer* destInstructionk, x86Addr* addr16 );
+  int x86EncodeAddr32( x86InstructionBuffer* destInstructionk, x86Addr* addr32 );
+
+  int x86GenOpMem( x86InstructionBuffer* destInstruction,
+    unsigned mnemonic, x86Addr* addr );
 
 /*
  *  Windows PE declarations
