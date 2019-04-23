@@ -66,7 +66,7 @@
       rsvdEndIf,
       rsvdWhile,
       rsvdNext,
-      rsvdBreak,
+      rsvdStop,
       rsvdEndWhile,
       rsvdIn,
       rsvdExit,
@@ -132,24 +132,24 @@
       operPrec15 = (operSymbol + (15 << 5)),
 
     // Assignment operators
-    setSymbol  = (4 << 9),
-      setTo,
-      setNot,
-      setAdd,
-      setSub,
-      setMul,
-      setDiv,
-      setMod,
-      setShl,
-      setShr,
-      setSShr,
-      setRol,
-      setSRol,
-      setRor,
-      setSRor,
-      setAnd,
-      setXor,
-      setOr,
+    assignSymbol  = (4 << 9),
+      assignTo,
+      assignNot,
+      assignAdd,
+      assignSub,
+      assignMul,
+      assignDiv,
+      assignMod,
+      assignShl,
+      assignShr,
+      assignSShr,
+      assignRol,
+      assignSRol,
+      assignRor,
+      assignSRor,
+      assignAnd,
+      assignXor,
+      assignOr,
 
     // x86 general tokens
     x86General = (5 << 9),
@@ -247,7 +247,7 @@
   SymTab* NewSymTab( char* tableName );
   void FreeSymTab( SymTab** symTab );
 
-  void* Lookup( SymTab* table, char* name, void* symItem );
+  void* Lookup( SymTab* table, char* name );
 
 /*
  *  Symbol declarations
@@ -273,25 +273,38 @@
   } TypeSpec;
 
   typedef struct _CallSpec {
-    unsigned callType;
+    // Call stack specifier
+    unsigned  callType;
+    // Left to right, right to left, etc
+    unsigned  paramOrder;
+    // Maximum parameters allowed by count and/or by size
+    size_t    maxParams;
+    size_t    stackLimit;
+    // Destination register or stack parameter specifiers
+    size_t    destCount;
+    unsigned* paramDest;
+    // Default frame type: esp or ebp
+    unsigned  frameType;
   } CallSpec;
 
   typedef struct _Param {
+    // Parameter specifiers
     TypeSpec* typeSpec;
+    size_t    paramOfs;
   } Param;
 
   typedef struct _ParamList {
     size_t paramCount;
-    Param param[];
+    Param  param[];
   } ParamList;
 
   typedef struct _VarSym {
     // Common Symbol Entry fields
     unsigned  symType;
     char*     name;
-    // Global variable specifiers
+    // Variable specifiers
     TypeSpec* typeSpec;
-    size_t    dataOfs;
+    size_t    varOfs;
     // Optional initialized value
     unsigned  initType;
     size_t    initSize;
