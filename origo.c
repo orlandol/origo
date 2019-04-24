@@ -253,25 +253,149 @@
  *  Symbol declarations
  */
 
+  typedef enum _SymType {
+    funcDecl = 1,
+    funcForward,
+    funcImport
+    // ...
+  } SymType;
+
+  // Function/Method parameter list
+  typedef struct _TypeSpec TypeSpec;
+
+  typedef struct _Param {
+    // Parameter specifiers
+    TypeSpec* typeSpec;
+    size_t    paramOfs;
+  } Param;
+
+  // [<'@' | '#'>]baseType['[' CONSTEXPR[',' ...] ']'] ['(' [PARAMDECL[',' ...]] ')']
   typedef struct _TypeSpec {
     // Optional name
     char*      name;
-    // Optional Pointer or reference specifier
+    // Optional Pointer specifiers: [Far] Pointer, [Far] Reference
     unsigned   pointerType;
     // Required simple/complex type
     unsigned   baseType;
     size_t     typeSize;
-    unsigned   typeCode;
+    unsigned   typeID;
     // Optional array specifier
     size_t     dimCount;
     unsigned*  dims;
     size_t     dimOfs;
+    // Function parameter list
+    size_t     paramCount;
+    Param*     param;
     // Default value
     unsigned   initType;
     size_t     initSize;
     uint8_t*   initVal;
   } TypeSpec;
 
+  //  enum [BASETYPE] IDENT
+  //    [IDENT[, ...] ['=' CONSTEXPR]]
+  //  end
+  typedef struct _EnumField {
+    char*    name;
+    size_t   valSize;
+    uint8_t* fieldVal; 
+  } EnumField;
+
+  typedef struct _EnumSym {
+    // Common Symbol Entry fields
+    char*      name;
+    unsigned   symType;
+    // Optional simple type
+    unsigned   baseType;
+    size_t     typeSize;
+    // enum Fields
+    size_t     fieldCount;
+    EnumField* field;
+  } EnumSym;
+
+  //  union IDENT => UNIONNAME
+  //    [TYPESPEC IDENT[, ...]]
+  //  end
+  typedef struct _UnionField {
+    char*     fieldName;
+    TypeSpec* typeSpec;
+    unsigned  fieldOfs;
+  } UnionField;
+
+  typedef struct _UnionSym {
+    // Common Symbol Entry fields
+    char*       name;
+    unsigned    symType;
+    // Union fields
+    size_t      fieldCount;
+    UnionField* field;
+  } UnionSym;
+
+  //  struct IDENT => STRUCTNAME
+  //    [TYPESPEC IDENT[, ...] ['=' CONSTEXPR]]
+  //    [union '(' TYPESPEC[, ...] ')' IDENT[, ...]]
+  //  end
+  typedef struct _StructField {
+    char*     fieldName;
+    TypeSpec* typeSpec;
+    unsigned  fieldOfs;
+    // Optional init value
+    size_t    initSize;
+    uint8_t*  initVal;
+  } StructField;
+
+  typedef struct _StructSym {
+    // Common Symbol Entry fields
+    char*        name;
+    unsigned     symType;
+    // Union fields
+    size_t       fieldCount;
+    StructField* field;
+  } StructSym;
+
+  //  type TYPESPEC IDENT ['=' CONSTEXPR][, ...]
+  typedef struct _TypeSym {
+    // Common Symbol Entry fields
+    char*        name;
+    unsigned     symType;
+    // Type Specifier
+    TypeSpec* typeSpec;
+    // Optional init value
+    size_t    initSize;
+    uint8_t*  initVal;
+  } TypeSym;
+
+  //  const
+  //    [TYPESPEC IDENT '=' CONSTEXPR[, ...]]
+  //  end
+  typedef struct _ConstSym {
+    // Common Symbol Entry fields
+    char*     name;
+    unsigned  symType;
+    // Variable specifiers
+    TypeSpec* typeSpec;
+    size_t    constOfs;
+    // Optional initialized value
+    size_t    initSize;
+    uint8_t*  initVal;
+  } ConstSym;
+
+  //  var
+  //    [TYPESPEC IDENT['=' CONSTEXPR][, ...]]
+  //  end
+  typedef struct _VarSym {
+    // Common Symbol Entry fields
+    char*     name;
+    unsigned  symType;
+    // Variable specifiers
+    TypeSpec* typeSpec;
+    size_t    varOfs;
+    // Optional initialized value
+    size_t    initSize;
+    uint8_t*  initVal;
+  } VarSym;
+
+  // Function/Method cdecl, stdcall, fastcall, thiscall, etc specifier
   typedef struct _CallSpec {
     // Call stack specifier
     unsigned  callType;
@@ -287,40 +411,155 @@
     unsigned  frameType;
   } CallSpec;
 
-  typedef struct _Param {
-    // Parameter specifiers
-    TypeSpec* typeSpec;
-    size_t    paramOfs;
-  } Param;
-
-  typedef struct _ParamList {
-    size_t paramCount;
-    Param  param[];
-  } ParamList;
-
-  typedef struct _VarSym {
+  // [declare] func [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')' ... end
+  // import func [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')'
+  //   from DLLNAMESTR [as ACTUALNAMESTR]
+  typedef struct _FuncSym {
     // Common Symbol Entry fields
     unsigned  symType;
     char*     name;
-    // Variable specifiers
+    // Function specifiers
+    CallSpec* callSpec;
     TypeSpec* typeSpec;
-    size_t    varOfs;
+    size_t    funcOfs;
+    // Function parameter list
+    size_t    paramCount;
+    Param*    funcParam;
+    // Optional import specifiers
+    char*     dllName;
+    char*     linkName;
     // Optional initialized value
     unsigned  initType;
     size_t    initSize;
     uint8_t*  initVal;
-  } VarSym;
+  } FuncSym;
 
-  ParamList* NewParamList();
-  void FreeParamList( ParamList** paramList );
+  //  object IDENT
+  //    [inherits OBJNAME[, ...]]
+  //  [<public | mutable>]
+  //    [TYPESPEC IDENT['=' CONSTEXPR][, ...]]
+  //  end
+  typedef struct _ObjectDescendant {
+    char* descendantName;
+  } ObjectDescendant;
 
-  bool DeclareParam( ParamList* paramList, TypeSpec* typeSpec );
+  typedef struct _MemberSym {
+    char*     memberName;
+    size_t    memberOfs;
+    unsigned  memberScope;
+    // Descendant list
+    size_t            descendantCount;
+    ObjectDescendant* descendant;
+    // Member variables
+    TypeSpec* typeSpec;
+    size_t    memberOfs;
+    // Optional initialized value
+    size_t    initSize;
+    uint8_t*  initVal;
+  } MemberSym;
+
+  typedef struct _ObjectSym {
+    // Common Symbol Entry fields
+    char*      name;
+    unsigned   symType;
+    // Object specifiers
+    unsigned   objectID;
+    // Member specifiers
+    size_t     memberCount;
+    MemberSym* member;
+  } ObjectSym;
+
+  //  ctor OBJNAME.IDENT '(' [MEMBERNAME[, ...]] ')'
+  typedef struct _MemberParam {
+    char*     name;
+    // Optional initialized value
+    size_t    initSize;
+    uint8_t*  initVal;
+  } MemberParam;
+
+  typedef struct _CtorSym {
+    // Common Symbol Entry fields
+    char*        name;
+    unsigned     symType;
+    // Offset value
+    size_t       ctorOfs;
+    // Name specifiers
+    char*        objectName;
+    char*        initName;
+    // Member parameter list
+    size_t       memberCount;
+    MemberParam* memberInit;
+  } CtorSym;
+
+  //  dtor OBJNAME '(' ')'
+  typedef struct _DtorSym {
+    // Common Symbol Entry fields
+    char*        name;
+    unsigned     symType;
+    // Offset value
+    size_t       dtorOfs;
+    // Name specifiers
+    char*        objectName;
+  } DtorSym;
+
+  //  abstract <OBJNAME | IDENT [implements OBJNAME[, ...]]>
+  //      [inherits <ABSNAME | IFACENAME>[, ...]]
+  //    [method [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')']
+  //  end
+  typedef struct _IFaceName {
+    char* ifaceName;
+  } IFaceName;
+
+  typedef struct _MethodSym MethodSym;
+
+  typedef struct _AbstractSym {
+    // Common Symbol Entry fields
+    char*        name;
+    unsigned     symType;
+    // Inherited Abstract/Interfaces
+    size_t       ifaceCount;
+    IFaceName*   inheritedIFace;
+    // Method declarations
+    // ...
+  } AbstractSym;
+
+  typedef struct _InterfaceSym {
+    // Common Symbol Entry fields
+    char*        name;
+    unsigned     symType;
+    // Inherited Abstract/Interfaces
+    size_t       ifaceCount;
+    IFaceName*   inheritedIFace;
+    // Method declarations
+    // ...
+  } InterfaceSym;
+
+  //  method [CALLSPEC] [TYPESPEC]
+  //      <ABSNAME | IFACENAME>.METHODNAME '(' [PARAMDECL[, ...]] ')'
+  typedef struct _MethodSym {
+    // Common Symbol Entry fields
+    unsigned  symType;
+    char*     name;
+    // Function specifiers
+    CallSpec* callSpec;
+    TypeSpec* typeSpec;
+    size_t    funcOfs;
+    // Method parameter list
+    size_t    paramCount;
+    Param*    methodParam;
+    // Optional initialized value
+    unsigned  initType;
+    size_t    initSize;
+    uint8_t*  initVal;
+  } MethodSym;
+
+  bool DeclareParam( FuncSym* funcSym, TypeSpec* typeSpec );
 
   bool DeclareVar( SymTab* symTab, char* name, TypeSpec* typeSpec,
     size_t varOffset, unsigned initType, void* initVal );
 
   bool DeclareFunc( SymTab* symTab, char* name, CallSpec* callSpec,
-    TypeSpec* typeSpec, ParamList* paramList, unsigned initType,
+    TypeSpec* typeSpec, Param* funcParam, size_t paramCount, unsigned initType,
     void* initVal );
 
   bool DeclareLabel( SymTab* symTab, char* name,

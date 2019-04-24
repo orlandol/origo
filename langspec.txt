@@ -11,9 +11,8 @@
 
   program IDENT
 
-    enum BASETYPE IDENT
-    [group IDENT[, ...]] [= CONSTEXPR]
-      [IDENT[, ...] [= CONSTEXPR]]
+    enum [BASETYPE] IDENT
+      [IDENT[, ...] ['=' CONSTEXPR]]
     end
 
     union IDENT => UNIONNAME
@@ -21,99 +20,103 @@
     end
 
     struct IDENT => STRUCTNAME
-      [TYPESPEC IDENT[, ...] [= CONSTEXPR]]
-      [union ( TYPESPEC[, ...] ) IDENT[, ...]]
+      [TYPESPEC IDENT[, ...] ['=' CONSTEXPR]]
+      [union '(' TYPESPEC[, ...] ')' IDENT[, ...]]
     end
 
-    alias TYPENAME IDENT [= CONSTEXPR][, ...]
+    alias TYPENAME IDENT ['=' CONSTEXPR][, ...]
 
-    type TYPESPEC IDENT [= CONSTEXPR][, ...]
+    type TYPESPEC IDENT ['=' CONSTEXPR][, ...]
+
+    const
+      [TYPESPEC IDENT '=' CONSTEXPR[, ...]]
+    end
 
     var
-      [TYPESPEC IDENT[= CONSTEXPR][, ...]]
+      [TYPESPEC IDENT['=' CONSTEXPR][, ...]]
     end
 
-    declare func [CALLSPEC] [TYPESPEC] IDENT( [PARAMDECL[, ...]] )
+    declare func [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')'
 
-    import func [CALLSPEC] [TYPESPEC] IDENT( [PARAMDECL[, ...]] )
+    import func [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')'
       from DLLNAMESTR [as ACTUALNAMESTR]
 
-    func [CALLSPEC] [TYPESPEC] IDENT( [PARAMDECL[, ...]] )
-        [= CONSTEXPR]
+    func [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')'
+        ['=' CONSTEXPR]
       [var
-        TYPESPEC IDENT[= CONSTEXPR][, ...]
+        [TYPESPEC IDENT['=' CONSTEXPR][, ...]]
       end]
 
-      <STATEMENT | result ASSIGNOP EXPRESSION | return [EXPRESSION]>
+      [<STATEMENT | result ASSIGNOP EXPRESSION | return [EXPRESSION]>]
     end
 
-    func asm [frame] [CALLSPEC] [TYPESPEC] IDENT( [PARAMDECL[, ...]] )
-        [= CONSTEXPR]
+    func asm [frame] [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')'
+        ['=' CONSTEXPR]
       [var
-        TYPESPEC IDENT[= CONSTEXPR][, ...]
+        [TYPESPEC IDENT['=' CONSTEXPR][, ...]]
       end]
 
-      ASMSTATEMENT
+      [ASMSTATEMENT]
     end
 
     object IDENT
       [inherits OBJNAME[, ...]]
     [<public | mutable>]
-      TYPESPEC IDENT[= CONSTEXPR][, ...]
+      [TYPESPEC IDENT['=' CONSTEXPR][, ...]]
     end
 
-    ctor OBJNAME.IDENT( [MEMBERNAME[, ...]] )
+    ctor OBJNAME.IDENT '(' [MEMBERNAME[, ...]] ')'
       [var
-        TYPESPEC IDENT[= CONSTEXPR][, ...]
+        [TYPESPEC IDENT['=' CONSTEXPR][, ...]]
       end]
 
-      <STATEMENT | return>
+      [<STATEMENT | return>]
     end
 
-    dtor OBJNAME()
+    dtor OBJNAME '(' ')'
       [var
-        TYPESPEC IDENT[= CONSTEXPR][, ...]
+        [TYPESPEC IDENT['=' CONSTEXPR][, ...]]
       end]
 
-      <STATEMENT | return>
+      [<STATEMENT | return>]
     end
 
     abstract <OBJNAME | IDENT [implements OBJNAME[, ...]]>
         [inherits <ABSNAME | IFACENAME>[, ...]]
-      method [CALLSPEC] [TYPESPEC] IDENT( [PARAMDECL[, ...]] )
+      [method [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')']
     end
 
     interface <OBJNAME | IDENT [implements OBJNAME[, ...]]>
         [inherits <ABSNAME | IFACENAME>[, ...]]
-      method [CALLSPEC] [TYPESPEC] IDENT( [PARAMDECL[, ...]] )
+      [method [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')']
     end
 
     method [CALLSPEC] [TYPESPEC]
-        <ABSNAME | IFACENAME>.METHODNAME( [PARAMDECL[, ...]] )
-        [= CONSTEXPR]
+        <ABSNAME | IFACENAME>.METHODNAME '(' [PARAMDECL[, ...]] ')'
+        ['=' CONSTEXPR]
       [var
-        TYPESPEC IDENT[= CONSTEXPR][, ...]
+        [TYPESPEC IDENT['=' CONSTEXPR][, ...]]
       end]
 
-      <STATEMENT | result ASSIGNOP EXPRESSION | return [EXPRESSION]>
+      [<STATEMENT | result ASSIGNOP EXPRESSION | return [EXPRESSION]>]
     end
 
     method asm [frame] [CALLSPEC] [TYPESPEC]
-        <ABSNAME | IFACENAME>.METHODNAME( [PARAMDECL[, ...]] )
-        [= CONSTEXPR]
+        <ABSNAME | IFACENAME>.METHODNAME '(' [PARAMDECL[, ...]] ')'
+        ['=' CONSTEXPR]
       [var
-        TYPESPEC IDENT[= CONSTEXPR][, ...]
+        [TYPESPEC IDENT['=' CONSTEXPR][, ...]]
       end]
 
-      ASMSTATEMENT
+      [ASMSTATEMENT]
     end
 
   run
     [var
-      TYPESPEC IDENT[= CONSTEXPR][, ...]
+      [TYPESPEC IDENT['=' CONSTEXPR][, ...]]
     end]
 
-    STATEMENT
+    [STATEMENT]
   end
 
 ==========================================================================
@@ -129,67 +132,67 @@ STATEMENT
 
   if CONDITION
     [thenif CONDITION]
-    STATEMENT
+    [STATEMENT]
   [elseif CONDITION
     [thenif CONDITION]
-    STATEMENT]
+    [STATEMENT]]
   [else
-    STATEMENT]
+    [STATEMENT]]
   endif
 
   case EXPRESSION
     [precase
       [var
-        TYPESPEC IDENT[= CONSTEXPR][, ...]
+        [TYPESPEC IDENT[= CONSTEXPR][, ...]]
       end]
-      <STATEMENT | return>
+      [<STATEMENT | return>]
     endpre]
 
     [postcase
       [var
-        TYPESPEC IDENT[= CONSTEXPR][, ...]
+        [TYPESPEC IDENT[= CONSTEXPR][, ...]]
       end]
-      <STATEMENT | return>
+      [<STATEMENT | return>]
     endpost]
 
     [of CONSTEXPR[..CONSTEXPR]
-      <STATEMENT | nextcase | exitcase>]
+      [<STATEMENT | nextcase | exitcase>]]
 
     [in '[' CONSTEXPR[, ...] ']'
-      <STATEMENT | nextcase | exitcase>]
+      [<STATEMENT | nextcase | exitcase>]]
 
     [default
-      STATEMENT]
+      [STATEMENT]]
   endcase
 
   [IDENT:]for VARNAME in <BASETYPE | SETNAME | '[' CONSTEXPR[, ...] ']' >
-    <STATEMENT | next [LABELNAME] | stop [LABELNAME]>
+    [<STATEMENT | next [LABELNAME] | stop [LABELNAME]>]
   endfor
 
   [IDENT:]for VARNAME = EXPRESSION <to | downto> EXPRESSION
         [step CONSTEXPR]
-    <STATEMENT | next [LABELNAME] | stop [LABELNAME]>
+    [<STATEMENT | next [LABELNAME] | stop [LABELNAME]>]
   endfor
 
   [IDENT:]while CONDITION
-    <STATEMENT | next [LABELNAME] | stop [LABELNAME]>
+    [<STATEMENT | next [LABELNAME] | stop [LABELNAME]>]
   endwhile
 
   [IDENT:]repeat
-    <STATEMENT | break [LABELNAME] | continue [LABELNAME]>
+    [<STATEMENT | break [LABELNAME] | continue [LABELNAME]>]
   when CONDITION
 
-  IDENT:
+  IDENT ':'
 
   goto LABELNAME
 
   VARNAME[<.FIELDNAME | .MEMBERNAME>] ASSIGNOP EXPRESSION
 
-  FUNCNAME[.FIELDNAME]( [EXPRESSION[, ...]] )
+  FUNCNAME[.FIELDNAME] '(' [EXPRESSION[, ...]] ')'
 
-  bind( OBJVAR, <ABSNAME | IFACENAME>[, ...] )
+  bind '(' OBJVAR, <ABSNAME | IFACENAME>[, ...] ')'
 
-  OBJVAR.METHODNAME( [EXPRESSION[, ...]] )
+  OBJVAR.METHODNAME '(' [EXPRESSION[, ...]] ')'
 
   exit EXPRESSION
 
