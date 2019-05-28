@@ -4,13 +4,13 @@
 #include <stdio.h>
 
   typedef char* KeyType;
-  typedef struct KeyItemData {
+  typedef struct KeyArrayData {
     unsigned value;
-  } KeyItemData;
+  } KeyArrayData;
 
   typedef struct KeyArrayItem {
     KeyType key;
-    KeyItemData data;
+    KeyArrayData data;
   } KeyArrayItem;
 
   typedef struct KeyArray {
@@ -21,7 +21,6 @@
 
   KeyArray* CreateKeyArray( size_t reserveCount ) {
     KeyArray* newKeyArray = NULL;
-    size_t adjustedCount = 0;
 
     newKeyArray = (KeyArray*)calloc(1, sizeof(KeyArray));
     if( newKeyArray == NULL ) {
@@ -29,17 +28,14 @@
     }
 
     if( reserveCount ) {
-      adjustedCount = (reserveCount + 7) & (~7);
-
       newKeyArray->item =
-        (KeyArrayItem*)calloc(adjustedCount, sizeof(KeyArrayItem));
+        (KeyArrayItem*)calloc(reserveCount, sizeof(KeyArrayItem));
       if( newKeyArray->item == NULL ) {
         goto ReturnError;
       }
 
-      newKeyArray->reservedCount = adjustedCount;
+      newKeyArray->reservedCount = reserveCount;
     }
-
     return newKeyArray;
 
   ReturnError:
@@ -51,28 +47,59 @@
       free( newKeyArray );
       newKeyArray = NULL;
     }
-
     return NULL;
   }
 
-  void FreeKeyArrayItem( KeyArrayItem** keyItem ) {
-  }
+  typedef void (*FreeKeyArrayItemFunc)( KeyArrayItem* keyItem );
 
-  void FreeKeyArray( KeyArray** keyList ) {
+  void FreeKeyArray( KeyArray** keyList, FreeKeyArrayItemFunc freeItem ) {
+    size_t index;
+    size_t itemCount;
+
     if( keyList && (*keyList) ) {
-      
+      if( freeItem ) {
+        itemCount = (*keyList)->itemCount;
+        for( index = 0; index < itemCount; index++ ) {
+          freeItem( &((*keyList)->item[index]) );
+        }
+      }
+
+      free( (*keyList) );
+      (*keyList) = NULL;
     }
   }
 
   bool InsertKeyArrayItem( KeyArray* keyList, KeyArrayItem* item ) {
     return false;
+  ReturnError:
+    return false;
   }
 
+  void RemoveKeyArrayItem( KeyArray* keyList, KeyType key ) {
+    return false;
+  ReturnError:
+    return false;
+  }
+
+  bool RetrieveKeyArrayData( KeyArray* keyList, KeyType key,
+    KeyArrayData* destData ) {
+    return false;
+  ReturnError:
+    return false;
+  }
+
+  void FreeKeyArrayItem( KeyArrayItem* keyItem ) {
+    if( keyItem ) {
+      keyItem->data.value = 0;
+    }
+  }
 
 int main( int argc, char* argv[] ) {
   KeyArray* list = NULL;
 
   list = CreateKeyArray(0);
+
+  FreeKeyArray( &list, FreeKeyArrayItem );
 
   return 0;
 }
