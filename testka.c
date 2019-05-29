@@ -69,16 +69,26 @@
     }
   }
 
-  bool InsertKeyArrayItem( KeyArray* keyList, KeyArrayItem* item ) {
-    return false;
-  ReturnError:
+  typedef int (*CompareKeyFunc)( KeyType left, KeyType right );
+
+  bool InsertKeyArrayItem( KeyArray* keyList, CompareKeyFunc compareKeys, KeyArrayItem* item ) {
+    unsigned leftIndex = 0;
+    unsigned insertPos = 0;
+    unsigned rightIndex = 0;
+    int result;
+
+    if( !(keyList && item) ) {
+    }
+
+    ///TODO: Grow list
+
     return false;
   }
 
   void RemoveKeyArrayItem( KeyArray* keyList, KeyType key ) {
-    return false;
+    return;
   ReturnError:
-    return false;
+    return;
   }
 
   bool RetrieveKeyArrayData( KeyArray* keyList, KeyType key,
