@@ -2,34 +2,34 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
-  typedef char* KeyType;
-  typedef struct KeyArrayData {
+  typedef struct StringKeyArrayData {
     unsigned value;
-  } KeyArrayData;
+  } StringKeyArrayData;
 
-  typedef struct KeyArrayItem {
-    KeyType key;
-    KeyArrayData data;
-  } KeyArrayItem;
+  typedef struct StringKeyArrayItem {
+    char* key;
+    StringKeyArrayData data;
+  } StringKeyArrayItem;
 
-  typedef struct KeyArray {
+  typedef struct StringKeyArray {
     size_t reservedCount;
     size_t itemCount;
-    KeyArrayItem* item;
-  } KeyArray;
+    StringKeyArrayItem* item;
+  } StringKeyArray;
 
-  KeyArray* CreateKeyArray( size_t reserveCount ) {
-    KeyArray* newKeyArray = NULL;
+  StringKeyArray* CreateStringKeyArray( size_t reserveCount ) {
+    StringKeyArray* newKeyArray = NULL;
 
-    newKeyArray = (KeyArray*)calloc(1, sizeof(KeyArray));
+    newKeyArray = (StringKeyArray*)calloc(1, sizeof(StringKeyArray));
     if( newKeyArray == NULL ) {
       goto ReturnError;
     }
 
     if( reserveCount ) {
       newKeyArray->item =
-        (KeyArrayItem*)calloc(reserveCount, sizeof(KeyArrayItem));
+        (StringKeyArrayItem*)calloc(reserveCount, sizeof(StringKeyArrayItem));
       if( newKeyArray->item == NULL ) {
         goto ReturnError;
       }
@@ -50,9 +50,9 @@
     return NULL;
   }
 
-  typedef void (*FreeKeyArrayItemFunc)( KeyArrayItem* keyItem );
+  typedef void (*FreeStringKeyArrayDataFunc)( StringKeyArrayData* keyData );
 
-  void FreeKeyArray( KeyArray** keyList, FreeKeyArrayItemFunc freeItem ) {
+  void FreeStringKeyArray( StringKeyArray** keyList, FreeStringKeyArrayDataFunc freeItem ) {
     size_t index;
     size_t itemCount;
 
@@ -60,7 +60,10 @@
       if( freeItem ) {
         itemCount = (*keyList)->itemCount;
         for( index = 0; index < itemCount; index++ ) {
-          freeItem( &((*keyList)->item[index]) );
+          if( (*keyList)->item[index].key ) {
+            free( (*keyList)->item[index].key );
+          }
+          freeItem( &((*keyList)->item[index].data) );
         }
       }
 
@@ -69,47 +72,127 @@
     }
   }
 
-  typedef int (*CompareKeyFunc)( KeyType left, KeyType right );
+  typedef int (*CompareStringKeyFunc)( const char* left, const char* right );
 
-  bool InsertKeyArrayItem( KeyArray* keyList, CompareKeyFunc compareKeys, KeyArrayItem* item ) {
-    unsigned leftIndex = 0;
-    unsigned insertPos = 0;
-    unsigned rightIndex = 0;
+  bool InsertStringKeyArrayItem( StringKeyArray* keyList, CompareStringKeyFunc compareKeys,
+      char* key, StringKeyArrayData* data ) {
+    unsigned leftIndex;
+    unsigned insertIndex;
+    unsigned rightIndex;
     int result;
+    char* newStrKey;
+    size_t keyLen;
+    unsigned reservedCount;
+    unsigned itemCount;
+    StringKeyArrayItem* item;
 
-    if( !(keyList && item) ) {
+    if( !(keyList && compareKeys && key && data) ) {
+      return false;
     }
 
-    ///TODO: Grow list
+    keyLen = strlen(key);
+    if( keyLen == 0 ) {
+      return false;
+    }
 
-    return false;
+    // Grow list, if necessary
+    reservedCount = keyList->reservedCount;
+    itemCount = keyList->itemCount;
+    item = keyList->item;
+
+    if( itemCount == reservedCount ) {
+      reservedCount += 8;
+      item = realloc(item, reservedCount * sizeof(StringKeyArrayItem));
+      if( item == NULL ) {
+        return false;
+      }
+      keyList->reservedCount = reservedCount;
+      keyList->item = item;
+    }
+
+    // Search for insert position
+    leftIndex = 0;
+    rightIndex = itemCount;
+    insertIndex = itemCount / 2;
+
+    while( leftIndex > rightIndex ) {
+      result = compareKeys(item[insertIndex].key, key);
+
+      if( result == 0 ) {
+        return false;
+      }
+
+      if( result < 0 ) {
+        rightIndex = insertIndex;
+      } else {
+        leftIndex = insertIndex + 1;
+      }
+
+      insertIndex = (leftIndex + rightIndex) / 2;
+    }
+
+    // Attempt to allocate key string before going further
+    newStrKey = malloc(keyLen + 1);
+    if( newStrKey == NULL ) {
+      return false;
+    }
+    strcpy( newStrKey, key );
+
+    // Move data past insertion point up, if necessary
+printf( "insertIndex: %u; (itemCount - insertIndex): %u\n", insertIndex, (itemCount - insertIndex) );
+    memmove( &(item[insertIndex + 1]), &(item[insertIndex]),
+        (itemCount - insertIndex) * sizeof(StringKeyArrayItem) );
+
+    // Insert item
+    item[insertIndex].key = newStrKey;
+    if( data ) {
+      memcpy( &(item[insertIndex].data), data, sizeof(StringKeyArrayData) );
+    }
+
+    keyList->itemCount++;
+
+    return true;
   }
 
-  void RemoveKeyArrayItem( KeyArray* keyList, KeyType key ) {
+  void RemoveStringKeyArrayItem( StringKeyArray* keyList, char* key ) {
     return;
   ReturnError:
     return;
   }
 
-  bool RetrieveKeyArrayData( KeyArray* keyList, KeyType key,
-    KeyArrayData* destData ) {
+  bool RetrieveStringKeyArrayData( StringKeyArray* keyList, char* key,
+      StringKeyArrayData* destData ) {
     return false;
   ReturnError:
     return false;
   }
 
-  void FreeKeyArrayItem( KeyArrayItem* keyItem ) {
-    if( keyItem ) {
-      keyItem->data.value = 0;
+  void FreeStringKeyArrayData( StringKeyArrayData* keyData ) {
+    if( keyData ) {
+      keyData->value = 0;
     }
   }
 
 int main( int argc, char* argv[] ) {
-  KeyArray* list = NULL;
+  StringKeyArray* list = NULL;
+  StringKeyArrayData data;
 
-  list = CreateKeyArray(0);
+  list = CreateStringKeyArray(0);
 
-  FreeKeyArray( &list, FreeKeyArrayItem );
+  data.value = 1234;
+  InsertStringKeyArrayItem( list, strcmp, "Orange", &data );
+
+  data.value = 2345;
+  InsertStringKeyArrayItem( list, strcmp, "Apple", &data );
+
+  data.value = 3456;
+  InsertStringKeyArrayItem( list, strcmp, "Zucchini", &data );
+
+  for( unsigned i = 0; i < list->itemCount; i++ ) {
+    printf( "key: %s; value: %u\n", list->item[i].key, list->item[i].data.value );
+  }
+
+  FreeStringKeyArray( &list, FreeStringKeyArrayData );
 
   return 0;
 }
