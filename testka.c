@@ -115,21 +115,21 @@
     rightIndex = itemCount;
     insertIndex = itemCount / 2;
 
-    while( leftIndex > rightIndex ) {
+    while( leftIndex < rightIndex ) {
       result = compareKeys(item[insertIndex].key, key);
 
       if( result == 0 ) {
         return false;
       }
 
-      if( result < 0 ) {
+      if( result > 0 ) {
         rightIndex = insertIndex;
       } else {
         leftIndex = insertIndex + 1;
       }
-
+  
       insertIndex = (leftIndex + rightIndex) / 2;
-    }
+  }
 
     // Attempt to allocate key string before going further
     newStrKey = malloc(keyLen + 1);
@@ -139,7 +139,6 @@
     strcpy( newStrKey, key );
 
     // Move data past insertion point up, if necessary
-printf( "insertIndex: %u; (itemCount - insertIndex): %u\n", insertIndex, (itemCount - insertIndex) );
     memmove( &(item[insertIndex + 1]), &(item[insertIndex]),
         (itemCount - insertIndex) * sizeof(StringKeyArrayItem) );
 
@@ -156,15 +155,22 @@ printf( "insertIndex: %u; (itemCount - insertIndex): %u\n", insertIndex, (itemCo
 
   void RemoveStringKeyArrayItem( StringKeyArray* keyList, char* key ) {
     return;
-  ReturnError:
-    return;
   }
 
   bool RetrieveStringKeyArrayData( StringKeyArray* keyList, char* key,
       StringKeyArrayData* destData ) {
+    unsigned leftIndex;
+    unsigned rightIndex;
+    unsigned retrieveIndex;
+
+    if( !(keyList && key && (*key)) ) {
+      return false;
+    }
+
     return false;
-  ReturnError:
-    return false;
+  }
+
+  void ReleaseUnusedStringKeyArrayItems( StringKeyArray* keyList ) {
   }
 
   void FreeStringKeyArrayData( StringKeyArrayData* keyData ) {
@@ -188,6 +194,12 @@ int main( int argc, char* argv[] ) {
   data.value = 3456;
   InsertStringKeyArrayItem( list, strcmp, "Zucchini", &data );
 
+  data.value = 4567;
+  InsertStringKeyArrayItem( list, strcmp, "Zucchini", &data );
+
+  data.value = 5678;
+  InsertStringKeyArrayItem( list, strcmp, "Apple", &data );
+  
   for( unsigned i = 0; i < list->itemCount; i++ ) {
     printf( "key: %s; value: %u\n", list->item[i].key, list->item[i].data.value );
   }
