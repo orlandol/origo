@@ -72,9 +72,7 @@
     }
   }
 
-  typedef int (*CompareStringKeyFunc)( const char* left, const char* right );
-
-  bool InsertStringKeyArrayItem( StringKeyArray* keyList, CompareStringKeyFunc compareKeys,
+  bool InsertStringKeyArrayItem( StringKeyArray* keyList,
       char* key, StringKeyArrayData* data ) {
     unsigned leftIndex;
     unsigned insertIndex;
@@ -86,7 +84,7 @@
     unsigned itemCount;
     StringKeyArrayItem* item;
 
-    if( !(keyList && compareKeys && key && data) ) {
+    if( !(keyList && key && data) ) {
       return false;
     }
 
@@ -116,7 +114,7 @@
     insertIndex = itemCount / 2;
 
     while( leftIndex < rightIndex ) {
-      result = compareKeys(item[insertIndex].key, key);
+      result = strcmp(item[insertIndex].key, key);
 
       if( result == 0 ) {
         return false;
@@ -162,9 +160,39 @@
     unsigned leftIndex;
     unsigned rightIndex;
     unsigned retrieveIndex;
+    int result;
+    unsigned reservedCount;
+    unsigned itemCount;
+    StringKeyArrayItem* item;
 
-    if( !(keyList && key && (*key)) ) {
+    if( !(keyList && key && (*key) && destData) ) {
       return false;
+    }
+
+    reservedCount = keyList->reservedCount;
+    itemCount = keyList->itemCount;
+    item = keyList->item;
+
+    // Search for insert position
+    leftIndex = 0;
+    rightIndex = itemCount;
+    retrieveIndex = itemCount / 2;
+
+    while( leftIndex < rightIndex ) {
+      result = strcmp(item[retrieveIndex].key, key);
+
+      if( result == 0 ) {
+        memcpy( destData, &(item[retrieveIndex].data), sizeof(StringKeyArrayData) );
+        return true;
+      }
+
+      if( result > 0 ) {
+        rightIndex = retrieveIndex;
+      } else {
+        leftIndex = retrieveIndex + 1;
+      }
+  
+      retrieveIndex = (leftIndex + rightIndex) / 2;
     }
 
     return false;
@@ -186,19 +214,19 @@ int main( int argc, char* argv[] ) {
   list = CreateStringKeyArray(0);
 
   data.value = 1234;
-  InsertStringKeyArrayItem( list, strcmp, "Orange", &data );
+  InsertStringKeyArrayItem( list, "Orange", &data );
 
   data.value = 2345;
-  InsertStringKeyArrayItem( list, strcmp, "Apple", &data );
+  InsertStringKeyArrayItem( list, "Apple", &data );
 
   data.value = 3456;
-  InsertStringKeyArrayItem( list, strcmp, "Zucchini", &data );
+  InsertStringKeyArrayItem( list, "Zucchini", &data );
 
   data.value = 4567;
-  InsertStringKeyArrayItem( list, strcmp, "Zucchini", &data );
+  InsertStringKeyArrayItem( list, "Zucchini", &data );
 
   data.value = 5678;
-  InsertStringKeyArrayItem( list, strcmp, "Apple", &data );
+  InsertStringKeyArrayItem( list, "Apple", &data );
   
   for( unsigned i = 0; i < list->itemCount; i++ ) {
     printf( "key: %s; value: %u\n", list->item[i].key, list->item[i].data.value );
