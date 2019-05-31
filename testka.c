@@ -232,6 +232,17 @@ int main( int argc, char* argv[] ) {
     printf( "key: %s; value: %u\n", list->item[i].key, list->item[i].data.value );
   }
 
+  printf( "\n" );
+
+  RetrieveStringKeyArrayData( list, "Apple", &data );
+  printf( "Apple: %u\n", data.value );
+
+  RetrieveStringKeyArrayData( list, "Orange", &data );
+  printf( "Orange: %u\n", data.value );
+
+  RetrieveStringKeyArrayData( list, "Zucchini", &data );
+  printf( "Zucchini: %u\n", data.value );
+
   FreeStringKeyArray( &list, FreeStringKeyArrayData );
 
   return 0;
