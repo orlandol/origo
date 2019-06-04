@@ -19,6 +19,8 @@
     StringKeyArrayItem* item;
   } StringKeyArray;
 
+  void FreeStringKeyArrayData( StringKeyArrayData* keyData );
+
   StringKeyArray* CreateStringKeyArray( size_t reserveCount ) {
     StringKeyArray* newKeyArray = NULL;
 
@@ -99,7 +101,11 @@
     item = keyList->item;
 
     if( itemCount == reservedCount ) {
+      if( (((size_t)-1) - reservedCount) < 8 ) {
+        return false;
+      }
       reservedCount += 8;
+
       item = realloc(item, reservedCount * sizeof(StringKeyArrayItem));
       if( item == NULL ) {
         return false;
@@ -177,7 +183,21 @@
       result = strcmp(item[retrieveIndex].key, key);
 
       if( result == 0 ) {
-        ///TODO: Run free data on item, free key, and shift data down
+        FreeStringKeyArrayData( &(item[retrieveIndex].data) );
+        if( item[retrieveIndex].key ) {
+          free( item[retrieveIndex].key );
+          item[retrieveIndex].key = NULL;
+        }
+
+        if( itemCount ) {
+          itemCount--;
+        }
+
+        memmove( &(item[retrieveIndex]), &(item[retrieveIndex + 1]),
+          (reservedCount - itemCount) * sizeof(StringKeyArrayItem) );
+
+        keyList->itemCount = itemCount;
+
         return;
       }
 
@@ -294,9 +314,9 @@
     if( newCopy->item == NULL ) {
       goto ReturnError;
     }
-    memcpy( newCopy->item, sourceList,
+    memcpy( newCopy->item, sourceList->item,
       reservedCount * sizeof(StringKeyArrayItem) );
-///
+
     for( index = 0; index < itemCount; index++ ) {
       keyLen = strlen(sourceItem[index].key);
       keyCopy = malloc(keyLen + 1);
@@ -308,6 +328,9 @@
       newCopy->item[index].key = keyCopy;
     }
 
+    newCopy->reservedCount = reservedCount;
+    newCopy->itemCount = itemCount;
+
     return newCopy;
 
   ReturnError:
@@ -317,13 +340,15 @@
 
     if( newCopy->item ) {
       for( index = 0; index < itemCount; index++ ) {
+        FreeStringKeyArrayData( &(newCopy->item[index].data) );
+      }
+
+      for( index = 0; index < itemCount; index++ ) {
         keyCopy = newCopy->item[index].key;
         if( keyCopy ) {
           free( keyCopy );
           keyCopy = NULL;
         }
-
-        ///TODO: Release data
       }
     }
 
@@ -372,6 +397,19 @@ int main( int argc, char* argv[] ) {
   }
   printf( "\n" );
 
+  data.value = 0;
+  RetrieveStringKeyArrayData( list, "Apple", &data );
+  printf( "  Apple: %u\n", data.value );
+
+  data.value = 0;
+  RetrieveStringKeyArrayData( list, "Orange", &data );
+  printf( "  Orange: %u\n", data.value );
+
+  data.value = 0;
+  RetrieveStringKeyArrayData( list, "Zucchini", &data );
+  printf( "  Zucchini: %u\n", data.value );
+  printf( "\n" );
+
   ReleaseUnusedStringKeyArrayItems( list );
 
   printf( "After ReleaseUnused...\n" );
@@ -404,7 +442,7 @@ int main( int argc, char* argv[] ) {
   printf( "\n" );
 
   printf( "After Copy...\n" );
-  if( !(listCopy && listCopy->item) ) {
+  if( (listCopy == NULL) || (listCopy->item == NULL) ) {
     printf( "  NULL list\n" );
   } else {
     for( unsigned i = 0; i < listCopy->itemCount; i++ ) {
@@ -425,6 +463,21 @@ int main( int argc, char* argv[] ) {
   data.value = 0;
   RetrieveStringKeyArrayData( listCopy, "Zucchini", &data );
   printf( "  Zucchini: %u\n", data.value );
+
+  printf( "\n" );
+
+  printf( "After Remove...\n" );
+  RemoveStringKeyArrayItem( listCopy, "Apple" );
+
+  if( (listCopy == NULL) || (listCopy->item == NULL) ) {
+    printf( "  NULL list\n" );
+  } else {
+    for( unsigned i = 0; i < listCopy->itemCount; i++ ) {
+      printf( "  key: %s; value: %u\n",
+        listCopy->item[i].key, listCopy->item[i].data.value );
+    }
+  }
+  printf( "\n" );
 
   FreeStringKeyArray( &listCopy, FreeStringKeyArrayData );
 
