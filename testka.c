@@ -82,6 +82,7 @@
     int result;
     char* newStrKey;
     size_t keyLen;
+    unsigned prevCount;
     unsigned reservedCount;
     unsigned itemCount;
     StringKeyArrayItem* item;
@@ -101,10 +102,11 @@
     item = keyList->item;
 
     if( itemCount == reservedCount ) {
-      if( (((size_t)-1) - reservedCount) < 8 ) {
+      prevCount = reservedCount;
+      reservedCount += 8;
+      if( prevCount > reservedCount ) {
         return false;
       }
-      reservedCount += 8;
 
       item = realloc(item, reservedCount * sizeof(StringKeyArrayItem));
       if( item == NULL ) {
@@ -160,7 +162,7 @@
   void RemoveStringKeyArrayItem( StringKeyArray* keyList, char* key ) {
     unsigned leftIndex;
     unsigned rightIndex;
-    unsigned retrieveIndex;
+    unsigned removeIndex;
     int result;
     unsigned reservedCount;
     unsigned itemCount;
@@ -177,37 +179,39 @@
     // Search for insert position
     leftIndex = 0;
     rightIndex = itemCount;
-    retrieveIndex = itemCount / 2;
+    removeIndex = itemCount / 2;
 
     while( leftIndex < rightIndex ) {
-      result = strcmp(item[retrieveIndex].key, key);
+      result = strcmp(item[removeIndex].key, key);
 
       if( result == 0 ) {
-        FreeStringKeyArrayData( &(item[retrieveIndex].data) );
-        if( item[retrieveIndex].key ) {
-          free( item[retrieveIndex].key );
-          item[retrieveIndex].key = NULL;
+        FreeStringKeyArrayData( &(item[removeIndex].data) );
+        if( item[removeIndex].key ) {
+          free( item[removeIndex].key );
+          item[removeIndex].key = NULL;
         }
 
         if( itemCount ) {
           itemCount--;
+
+          memcpy( &(item[removeIndex]), &(item[removeIndex + 1]),
+            (itemCount - removeIndex) * sizeof(StringKeyArrayItem) );
+
+          keyList->itemCount = itemCount;
         }
 
-        memmove( &(item[retrieveIndex]), &(item[retrieveIndex + 1]),
-          (reservedCount - itemCount) * sizeof(StringKeyArrayItem) );
-
-        keyList->itemCount = itemCount;
+        memset( &(item[itemCount]), 0, sizeof(StringKeyArrayItem) );
 
         return;
       }
 
       if( result > 0 ) {
-        rightIndex = retrieveIndex;
+        rightIndex = removeIndex;
       } else {
-        leftIndex = retrieveIndex + 1;
+        leftIndex = removeIndex + 1;
       }
   
-      retrieveIndex = (leftIndex + rightIndex) / 2;
+      removeIndex = (leftIndex + rightIndex) / 2;
     }
   }
 
@@ -280,6 +284,12 @@
     }
   }
 
+  typedef void (*CopyStringKeyDataFunc)( StringKeyArrayData* destData,
+      StringKeyArrayData* sourceData );
+
+  void CopyStringKeyData( StringKeyArrayData* destData,
+      StringKeyArrayData* srcData );
+
   StringKeyArray* CopyStringKeyArray( StringKeyArray* sourceList ) {
     StringKeyArray* newCopy = NULL;
     StringKeyArrayItem* sourceItem = NULL;
@@ -314,10 +324,11 @@
     if( newCopy->item == NULL ) {
       goto ReturnError;
     }
-    memcpy( newCopy->item, sourceList->item,
-      reservedCount * sizeof(StringKeyArrayItem) );
 
     for( index = 0; index < itemCount; index++ ) {
+      CopyStringKeyData( &(newCopy->item[index].data),
+          &(sourceItem[index].data) );
+
       keyLen = strlen(sourceItem[index].key);
       keyCopy = malloc(keyLen + 1);
       if( keyCopy == NULL ) {
@@ -358,6 +369,13 @@
     return NULL;
   }
 
+  void CopyStringKeyData( StringKeyArrayData* destData,
+      StringKeyArrayData* srcData ) {
+    if( destData && srcData ) {
+      destData->value = srcData->value;
+    }
+  }
+
   void FreeStringKeyArrayData( StringKeyArrayData* keyData ) {
     if( keyData ) {
       keyData->value = 0;
@@ -386,6 +404,7 @@ int main( int argc, char* argv[] ) {
   data.value = 5678;
   InsertStringKeyArrayItem( list, "Apple", &data );
 
+  printf( "\n" );
   printf( "Before Copy, and ReleaseUnused...\n" );
   if( (list == NULL) || (list->item == NULL) ) {
     printf( "  NULL list\n" );
@@ -461,13 +480,15 @@ int main( int argc, char* argv[] ) {
   printf( "  Orange: %u\n", data.value );
 
   data.value = 0;
-  RetrieveStringKeyArrayData( listCopy, "Zucchini", &data );
+  RetrieveStringKeyArrayData( listCopy, "Apple", &data );
   printf( "  Zucchini: %u\n", data.value );
 
   printf( "\n" );
 
   printf( "After Remove...\n" );
   RemoveStringKeyArrayItem( listCopy, "Apple" );
+  RemoveStringKeyArrayItem( listCopy, "Zucchini" );
+  RemoveStringKeyArrayItem( listCopy, "Orange" );
 
   if( (listCopy == NULL) || (listCopy->item == NULL) ) {
     printf( "  NULL list\n" );
