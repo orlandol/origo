@@ -1,2 +1,2 @@
 # origo
-Phase 2 self-compiling subset of the Retineo language
+Phase 1 self-compiling subset of the Retineo language
