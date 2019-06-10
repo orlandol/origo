@@ -54,15 +54,15 @@
 
   typedef void (*FreeUintKeyArrayDataFunc)( UintKeyArrayData* keyData );
 
-  void FreeUintKeyArray( UintKeyArray** keyList, FreeUintKeyArrayDataFunc freeItem ) {
+  void FreeUintKeyArray( UintKeyArray** keyList, FreeUintKeyArrayDataFunc freeData) {
     size_t index;
     size_t itemCount;
 
     if( keyList && (*keyList) ) {
-      if( freeItem ) {
+      if( freeData ) {
         itemCount = (*keyList)->itemCount;
         for( index = 0; index < itemCount; index++ ) {
-          freeItem( &((*keyList)->item[index].data) );
+          freeData( &((*keyList)->item[index].data) );
         }
       }
 

@@ -54,18 +54,18 @@
 
   typedef void (*FreeStringKeyArrayDataFunc)( StringKeyArrayData* keyData );
 
-  void FreeStringKeyArray( StringKeyArray** keyList, FreeStringKeyArrayDataFunc freeItem ) {
+  void FreeStringKeyArray( StringKeyArray** keyList, FreeStringKeyArrayDataFunc freeData ) {
     size_t index;
     size_t itemCount;
 
     if( keyList && (*keyList) ) {
-      if( freeItem ) {
+      if( freeData ) {
         itemCount = (*keyList)->itemCount;
         for( index = 0; index < itemCount; index++ ) {
           if( (*keyList)->item[index].key ) {
             free( (*keyList)->item[index].key );
           }
-          freeItem( &((*keyList)->item[index].data) );
+          freeData( &((*keyList)->item[index].data) );
         }
       }
 
@@ -135,7 +135,7 @@
       }
   
       insertIndex = (leftIndex + rightIndex) / 2;
-  }
+    }
 
     // Attempt to allocate key string before going further
     newStrKey = malloc(keyLen + 1);
