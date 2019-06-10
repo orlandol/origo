@@ -9,6 +9,15 @@
 
   DECLARE_STRING_KEYARRAY_TYPES( FruitList, FruitData )
 
+  void CopyFruit( FruitData* destData, FruitData* sourceData ) {
+    if( destData && sourceData ) {
+      destData->value = sourceData->value;
+    }
+  }
+
+  void FreeFruit( FruitData* data ) {
+  }
+
   DECLARE_STRING_KEYARRAY_CREATE( CreateFruitList, FruitList )
   DECLARE_STRING_KEYARRAY_FREE( FreeFruitList, FruitList, FreeFruit )
   DECLARE_STRING_KEYARRAY_INSERT( InsertFruit, FruitList, FruitData )
@@ -17,18 +26,15 @@
   DECLARE_STRING_KEYARRAY_RELEASEUNUSED( ReleaseUnusedFruits, FruitList )
   DECLARE_STRING_KEYARRAY_COPY( CopyFruitList, FruitList, Fruit, CopyFruit, FreeFruit )
 
-  void CopyFruit( FruitData* destData, FruitData* sourceData ) {
-  }
-
-  void FreeFruit( FruitData* data ) {
-  }
-
 int main( int argc, char* argv[] ) {
   FruitList* fruitList;
   FruitList* fruitListCopy;
   FruitData  data;
 
   fruitList = CreateFruitList(0);
+
+  printf( "\n" );
+  printf( "Testing string key array.\n" );
 
   data.value = 1234;
   InsertFruit( fruitList, "Orange", &data );
@@ -95,9 +101,9 @@ int main( int argc, char* argv[] ) {
   RetrieveFruit( fruitList, "Zucchini", &data );
   printf( "  Zucchini: %u\n", data.value );
 
-  fruitListCopy = CopyStringKeyArray(fruitList);
+  fruitListCopy = CopyFruitList(fruitList);
 
-  FreeStringKeyArray( &fruitList, FreeStringKeyArrayData );
+  FreeFruitList( &fruitList );
 
   printf( "\n" );
 
