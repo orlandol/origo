@@ -5,6 +5,7 @@
 #include <stdlib.h>
 
 #include "avl.h"
+#include "keyarray.h"
 
 /*
  *  Global variables
@@ -207,7 +208,7 @@
  *  Keyword table declarations
  */
 
-  typedef struct _Keyword {
+  typedef struct Keyword {
     char*    name;
     unsigned token;
   } Keyword;
@@ -224,19 +225,26 @@
  *  String declarations
  */
 
-  typedef struct _string {
+  typedef struct rstring {
     size_t length;
-    char   text[];
-  } string;
+    char*  text;
+  } rstring;
 
-  string* NewString( size_t length );
-  string* CopyString( char* strVal );
-  void FreeString( string** strVar );
+  rstring* NewRString();
+  rstring* CopyString( char* sourceString );
+  rstring* CopyRString( rstring* sourceRString );
+  void FreeRString( rstring** destRString );
 
-  string* AppendString( string* toString, char* fromVal );
+  int AppendChar( rstring* destString, char sourceChar );
 
-  int Compare( string* left, string* right );
-  int CaseCompare( string* left, string* right );
+  int AppendString( rstring* destString, char* sourceString );
+  int AppendRString( rstring* destRString, rstring* sourceRString );
+
+  int CompareString( char* leftString, char* rightString );
+  int CompareRString( rstring* leftRString, rstring* rightRString );
+
+  int CaseCompareString( char* leftString, char* rightString );
+  int CaseCompareRString( rstring* leftRString, rstring* rightRString );
 
 /*
  *  Symbol table declarations
@@ -261,16 +269,16 @@
   } SymType;
 
   // Function/Method parameter list
-  typedef struct _TypeSpec TypeSpec;
+  typedef struct TypeSpec TypeSpec;
 
-  typedef struct _Param {
+  typedef struct Param {
     // Parameter specifiers
     TypeSpec* typeSpec;
     size_t    paramOfs;
   } Param;
 
   // [<'@' | '#'>]baseType['[' CONSTEXPR[',' ...] ']'] ['(' [PARAMDECL[',' ...]] ')']
-  typedef struct _TypeSpec {
+  typedef struct TypeSpec {
     // Optional name
     char*      name;
     // Optional Pointer specifiers: [Far] Pointer, [Far] Reference
@@ -295,13 +303,13 @@
   //  enum [BASETYPE] IDENT
   //    [IDENT[, ...] ['=' CONSTEXPR]]
   //  end
-  typedef struct _EnumField {
+  typedef struct EnumField {
     char*    name;
     size_t   valSize;
     uint8_t* fieldVal; 
   } EnumField;
 
-  typedef struct _EnumSym {
+  typedef struct EnumSym {
     // Common Symbol Entry fields
     char*      name;
     unsigned   symType;
@@ -316,13 +324,13 @@
   //  union IDENT => UNIONNAME
   //    [TYPESPEC IDENT[, ...]]
   //  end
-  typedef struct _UnionField {
+  typedef struct UnionField {
     char*     fieldName;
     TypeSpec* typeSpec;
     unsigned  fieldOfs;
   } UnionField;
 
-  typedef struct _UnionSym {
+  typedef struct UnionSym {
     // Common Symbol Entry fields
     char*       name;
     unsigned    symType;
@@ -335,7 +343,7 @@
   //    [TYPESPEC IDENT[, ...] ['=' CONSTEXPR]]
   //    [union '(' TYPESPEC[, ...] ')' IDENT[, ...]]
   //  end
-  typedef struct _StructField {
+  typedef struct StructField {
     char*     fieldName;
     TypeSpec* typeSpec;
     unsigned  fieldOfs;
@@ -344,7 +352,7 @@
     uint8_t*  initVal;
   } StructField;
 
-  typedef struct _StructSym {
+  typedef struct StructSym {
     // Common Symbol Entry fields
     char*        name;
     unsigned     symType;
@@ -354,7 +362,7 @@
   } StructSym;
 
   //  type TYPESPEC IDENT ['=' CONSTEXPR][, ...]
-  typedef struct _TypeSym {
+  typedef struct TypeSym {
     // Common Symbol Entry fields
     char*        name;
     unsigned     symType;
@@ -368,7 +376,7 @@
   //  const
   //    [TYPESPEC IDENT '=' CONSTEXPR[, ...]]
   //  end
-  typedef struct _ConstSym {
+  typedef struct ConstSym {
     // Common Symbol Entry fields
     char*     name;
     unsigned  symType;
@@ -383,7 +391,7 @@
   //  var
   //    [TYPESPEC IDENT['=' CONSTEXPR][, ...]]
   //  end
-  typedef struct _VarSym {
+  typedef struct VarSym {
     // Common Symbol Entry fields
     char*     name;
     unsigned  symType;
@@ -396,7 +404,7 @@
   } VarSym;
 
   // Function/Method cdecl, stdcall, fastcall, thiscall, etc specifier
-  typedef struct _CallSpec {
+  typedef struct CallSpec {
     // Call stack specifier
     unsigned  callType;
     // Left to right, right to left, etc
@@ -414,7 +422,7 @@
   // [declare] func [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')' ... end
   // import func [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')'
   //   from DLLNAMESTR [as ACTUALNAMESTR]
-  typedef struct _FuncSym {
+  typedef struct FuncSym {
     // Common Symbol Entry fields
     unsigned  symType;
     char*     name;
@@ -439,11 +447,11 @@
   //  [<public | mutable>]
   //    [TYPESPEC IDENT['=' CONSTEXPR][, ...]]
   //  end
-  typedef struct _ObjectDescendant {
+  typedef struct ObjectDescendant {
     char* descendantName;
   } ObjectDescendant;
 
-  typedef struct _MemberSym {
+  typedef struct MemberSym {
     char*     memberName;
     size_t    memberOfs;
     unsigned  memberScope;
@@ -458,7 +466,7 @@
     uint8_t*  initVal;
   } MemberSym;
 
-  typedef struct _ObjectSym {
+  typedef struct ObjectSym {
     // Common Symbol Entry fields
     char*      name;
     unsigned   symType;
@@ -470,14 +478,14 @@
   } ObjectSym;
 
   //  ctor OBJNAME.IDENT '(' [MEMBERNAME[, ...]] ')'
-  typedef struct _MemberParam {
+  typedef struct MemberParam {
     char*     name;
     // Optional initialized value
     size_t    initSize;
     uint8_t*  initVal;
   } MemberParam;
 
-  typedef struct _CtorSym {
+  typedef struct CtorSym {
     // Common Symbol Entry fields
     char*        name;
     unsigned     symType;
@@ -492,7 +500,7 @@
   } CtorSym;
 
   //  dtor OBJNAME '(' ')'
-  typedef struct _DtorSym {
+  typedef struct DtorSym {
     // Common Symbol Entry fields
     char*        name;
     unsigned     symType;
@@ -506,13 +514,13 @@
   //      [inherits <ABSNAME | IFACENAME>[, ...]]
   //    [method [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')']
   //  end
-  typedef struct _IFaceName {
+  typedef struct IFaceName {
     char* ifaceName;
   } IFaceName;
 
-  typedef struct _MethodSym MethodSym;
+  typedef struct MethodSym MethodSym;
 
-  typedef struct _AbstractSym {
+  typedef struct AbstractSym {
     // Common Symbol Entry fields
     char*        name;
     unsigned     symType;
@@ -523,7 +531,7 @@
     // ...
   } AbstractSym;
 
-  typedef struct _InterfaceSym {
+  typedef struct InterfaceSym {
     // Common Symbol Entry fields
     char*        name;
     unsigned     symType;
@@ -536,7 +544,7 @@
 
   //  method [CALLSPEC] [TYPESPEC]
   //      <ABSNAME | IFACENAME>.METHODNAME '(' [PARAMDECL[, ...]] ')'
-  typedef struct _MethodSym {
+  typedef struct MethodSym {
     // Common Symbol Entry fields
     unsigned  symType;
     char*     name;
@@ -587,7 +595,7 @@
  *  Code generator declarations
  */
 
-  typedef struct _x86InstructionBuffer {
+  typedef struct x86InstructionBuffer {
     uint8_t fields;
     uint8_t prefix[4];
     uint8_t opcode[3];
@@ -597,7 +605,7 @@
     uint32_t immediate;
   } x86InstructionBuffer;
 
-  typedef struct _x86Addr {
+  typedef struct x86Addr {
     unsigned fields;
     unsigned baseReg;
     unsigned indexReg;
@@ -637,6 +645,9 @@ int main( int argc, char* argv[] ) {
   argCount = argc;
   argVar = argv;
 
+  rstring* testingStr = CopyString("Testing");
+  printf( "[%p]->\"%s\"\n", testingStr, testingStr->text );
+
   return 0;
 }
 
@@ -647,6 +658,83 @@ int main( int argc, char* argv[] ) {
 /*
  *  String declarations
  */
+
+  rstring* NewRString() {
+    return calloc(1, sizeof(rstring));
+  }
+
+  rstring* CopyString( char* sourceString ) {
+    rstring* newCopy = NULL;
+    size_t   textLength;
+    size_t   textSize;
+
+    if( sourceString == NULL ) {
+      goto ReturnError;
+    }
+
+    textLength = strlen(sourceString);
+    textSize = (textLength + 7) & (~7);
+    if( textLength >= textSize ) {
+      goto ReturnError;
+    }
+
+    newCopy = malloc(sizeof(rstring));
+    if( newCopy == NULL ) {
+      goto ReturnError;
+    }
+
+    newCopy->text = malloc(textSize);
+    if( newCopy->text == NULL ) {
+      goto ReturnError;
+    }
+
+    strcpy( newCopy->text, sourceString );
+    newCopy->length = textLength;
+
+    return newCopy;
+
+  ReturnError:
+    FreeRString( &newCopy );
+
+    return NULL;
+  }
+
+  rstring* CopyRString( rstring* sourceString ) {
+    if( sourceString ) {
+      return CopyString(sourceString->text);
+    }
+
+    return NULL;
+  }
+
+  void FreeRString( rstring** destRString ) {
+    if( destRString ) {
+    }
+  }
+
+  int AppendString( rstring* destRString, char* sourceString ) {
+    return 0;
+  }
+
+  int AppendRString( rstring* destString, rstring* sourceString ) {
+    return 0;
+  }
+
+  int CompareString( char* leftString, char* rightString ) {
+    return 1;
+  }
+
+  int CompareRString( rstring* leftRString, rstring* rightRString ) {
+    return 1;
+  }
+
+  int CaseCompareString( char* leftString, char* rightString ) {
+    return 1;
+  }
+
+  int CaseCompareRString( rstring* leftRString, rstring* rightRString ) {
+    return 1;
+  }
 
 /*
  *  Symbol table implementation
