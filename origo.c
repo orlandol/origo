@@ -225,26 +225,14 @@
  *  String declarations
  */
 
-  typedef struct rstring {
-    size_t length;
-    char*  text;
-  } rstring;
+  char* strnew( char* source );
 
-  rstring* NewRString();
-  rstring* CopyString( char* sourceString );
-  rstring* CopyRString( rstring* sourceRString );
-  void FreeRString( rstring** destRString );
+  int strappend( char** dest, char* source );
+  int strappendch( char** dest, char source );
 
-  int AppendChar( rstring* destString, char sourceChar );
-
-  int AppendString( rstring* destString, char* sourceString );
-  int AppendRString( rstring* destRString, rstring* sourceRString );
-
-  int CompareString( char* leftString, char* rightString );
-  int CompareRString( rstring* leftRString, rstring* rightRString );
-
-  int CaseCompareString( char* leftString, char* rightString );
-  int CaseCompareRString( rstring* leftRString, rstring* rightRString );
+  char* strleft( char* source, size_t endPos );
+  char* strright( char* source, size_t startPos );
+  char* substr( char* source, size_t startPos, size_t endPos );
 
 /*
  *  Symbol table declarations
@@ -645,8 +633,35 @@ int main( int argc, char* argv[] ) {
   argCount = argc;
   argVar = argv;
 
-  rstring* testingStr = CopyString("Testing");
-  printf( "[%p]->\"%s\"\n", testingStr, testingStr->text );
+  char* programStr = strnew("Testing");
+  char* programStrCopy = strnew(programStr);
+
+  printf( "[%p]->\"%s\"\n", programStr, programStr );
+  printf( "[%p]->\"%s\"\n", programStrCopy, programStrCopy );
+
+  strappendch( &programStr, ' ' );
+  strappendch( &programStr, 't' );
+  strappendch( &programStr, 'e' );
+  strappendch( &programStr, 's' );
+  strappendch( &programStr, 't' );
+  strappendch( &programStr, 'i' );
+  strappendch( &programStr, 'n' );
+  strappendch( &programStr, 'g' );
+  strappendch( &programStr, '1' );
+  strappendch( &programStr, '2' );
+  strappendch( &programStr, '3' );
+
+  printf( "[%p]->\"%s\"\n", programStr, programStr );
+  printf( "[%p]->\"%s\"\n", programStrCopy, programStrCopy );
+
+  free( programStr );
+  programStr = NULL;
+
+  free( programStrCopy );
+  programStrCopy = NULL;
+
+  printf( "[%p]\n", programStr );
+  printf( "[%p]\n", programStrCopy );
 
   return 0;
 }
@@ -659,81 +674,58 @@ int main( int argc, char* argv[] ) {
  *  String declarations
  */
 
-  rstring* NewRString() {
-    return calloc(1, sizeof(rstring));
-  }
+  char* strnew( char* source ) {
+    char*  sourceCopy = NULL;
+    size_t length;
+    size_t size;
 
-  rstring* CopyString( char* sourceString ) {
-    rstring* newCopy = NULL;
-    size_t   textLength;
-    size_t   textSize;
+    if( source ) {
+      length = strlen(source);
+      size = (length + 7) & (~7);
+      if( length > size ) {
+        return NULL;
+      }
 
-    if( sourceString == NULL ) {
-      goto ReturnError;
-    }
+      sourceCopy = calloc(1, size);
+      if( sourceCopy == NULL ) {
+        return NULL;
+      }
 
-    textLength = strlen(sourceString);
-    textSize = (textLength + 7) & (~7);
-    if( textLength >= textSize ) {
-      goto ReturnError;
-    }
+      strcpy( sourceCopy, source );
 
-    newCopy = malloc(sizeof(rstring));
-    if( newCopy == NULL ) {
-      goto ReturnError;
-    }
-
-    newCopy->text = malloc(textSize);
-    if( newCopy->text == NULL ) {
-      goto ReturnError;
-    }
-
-    strcpy( newCopy->text, sourceString );
-    newCopy->length = textLength;
-
-    return newCopy;
-
-  ReturnError:
-    FreeRString( &newCopy );
-
-    return NULL;
-  }
-
-  rstring* CopyRString( rstring* sourceString ) {
-    if( sourceString ) {
-      return CopyString(sourceString->text);
+      return sourceCopy;
     }
 
     return NULL;
   }
 
-  void FreeRString( rstring** destRString ) {
-    if( destRString ) {
+  int strappend( char** dest, char* source ) {
+    char* newDest = NULL;
+    size_t destLength;
+    size_t destSize;
+    size_t sourceLength;
+
+    if( dest == NULL ) {
+      return 0;
     }
-  }
 
-  int AppendString( rstring* destRString, char* sourceString ) {
     return 0;
   }
 
-  int AppendRString( rstring* destString, rstring* sourceString ) {
+  int strappendch( char** dest, char source ) {
     return 0;
   }
 
-  int CompareString( char* leftString, char* rightString ) {
-    return 1;
+  char* strleft( char* source, size_t endPos ) {
+    return NULL;
   }
 
-  int CompareRString( rstring* leftRString, rstring* rightRString ) {
-    return 1;
+  char* strright( char* source, size_t startPos ) {
+    return NULL;
   }
 
-  int CaseCompareString( char* leftString, char* rightString ) {
-    return 1;
-  }
-
-  int CaseCompareRString( rstring* leftRString, rstring* rightRString ) {
-    return 1;
+  char* substr( char* source, size_t startPos, size_t endPos ) {
+    return NULL;
   }
 
 /*
