@@ -225,14 +225,23 @@
  *  String declarations
  */
 
-  char* strnew( char* source );
+  typedef struct rstring {
+    size_t length;
+    size_t rsvdLength;
+    char   text[];
+  } rstring;
 
-  int strappend( char** dest, char* source );
-  int strappendch( char** dest, char source );
+  size_t rstringlen( rstring* source );
 
-  char* strleft( char* source, size_t endPos );
-  char* strright( char* source, size_t startPos );
-  char* substr( char* source, size_t startPos, size_t endPos );
+  rstring* rstralloc( char* source, size_t sourceLength );
+  rstring* rstrdup( char* source, size_t sourceLength );
+
+  int strappendch( rstring** dest, char source );
+  int strappend( rstring** dest, char* source, size_t sourceLength );
+
+  rstring* strleft( char* source, size_t sourceLength, size_t endPos );
+  rstring* strright( char* source, size_t sourceLength, size_t startPos );
+  rstring* substr( char* source, size_t sourceLength, size_t startPos, size_t endPos );
 
 /*
  *  Symbol table declarations
@@ -633,8 +642,8 @@ int main( int argc, char* argv[] ) {
   argCount = argc;
   argVar = argv;
 
-  char* programStr = strnew("Testing");
-  char* programStrCopy = strnew(programStr);
+  rstring* programStr = rstralloc("Testing", 0);
+  rstring* programStrCopy = NULL;
 
   printf( "[%p]->\"%s\"\n", programStr, programStr );
   printf( "[%p]->\"%s\"\n", programStrCopy, programStrCopy );
@@ -673,58 +682,90 @@ int main( int argc, char* argv[] ) {
 /*
  *  String declarations
  */
+  size_t rstringlen( rstring* source ) {
+    return 0;
+  }
+
+  rstring* rstralloc( char* source, size_t sourceLength ) {
+    rstring* sourceCopy = NULL;
+    size_t   sourceSize;
+
+    if( source == NULL ) {
+      source = "";
+      sourceLength = 0;
+    }
+
+    if( sourceLength == 0 ) {
+      sourceLength = strlen(source);
+    }
+
+    sourceSize = (sourceSize + 8) & (~7);
+    if( sourceLength > sourceSize ) {
+      return NULL;
+    }
+
+    if( source == NULL ) {
+      sourceCopy = calloc(1, 8 * sizeof(char));
+    } else {
+      sourceCopy = malloc(sourceSize);
+    }
+
+    if( source && sourceCopy ) {
+      strcpy( sourceCopy->text, source );
+    }
+
+    return sourceCopy;
+  }
 
   char* strnew( char* source ) {
     char*  sourceCopy = NULL;
-    size_t length;
-    size_t size;
+    size_t sourceLength;
+    size_t sourceSize;
 
-    if( source ) {
-      length = strlen(source);
-      size = (length + 7) & (~7);
-      if( length > size ) {
-        return NULL;
-      }
-
-      sourceCopy = calloc(1, size);
-      if( sourceCopy == NULL ) {
-        return NULL;
-      }
-
-      strcpy( sourceCopy, source );
-
-      return sourceCopy;
+    if( source == NULL ) {
+      source = "";
     }
 
-    return NULL;
+    sourceLength = strlen(source);
+    sourceSize = (sourceSize + 8) & (~7);
+    if( sourceLength > sourceSize ) {
+      return NULL;
+    }
+
+    if( source == NULL ) {
+      sourceCopy = calloc(1, 8 * sizeof(char));
+    } else {
+      sourceCopy = malloc(sourceSize);
+    }
+
+    if( source && sourceCopy ) {
+      strcpy( sourceCopy, source );
+    }
+
+    return sourceCopy;
   }
 
-  int strappend( char** dest, char* source ) {
-    char* newDest = NULL;
-    size_t destLength;
-    size_t destSize;
-    size_t sourceLength;
-
-    if( dest == NULL ) {
+  int strappendch( rstring** dest, char source ) {
+    if( !(dest && (*dest)) ) {
       return 0;
     }
 
     return 0;
   }
 
-  int strappendch( char** dest, char source ) {
+  int strappend( rstring** dest, char* source, size_t sourceLength ) {
     return 0;
   }
 
-  char* strleft( char* source, size_t endPos ) {
+  rstring* strleft( char* source, size_t sourceLength, size_t endPos ) {
     return NULL;
   }
 
-  char* strright( char* source, size_t startPos ) {
+  rstring* strright( char* source, size_t sourceLength, size_t startPos ) {
     return NULL;
   }
 
-  char* substr( char* source, size_t startPos, size_t endPos ) {
+  rstring* substr( char* source, size_t sourceLength, size_t startPos, size_t endPos ) {
     return NULL;
   }
 
