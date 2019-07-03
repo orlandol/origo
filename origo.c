@@ -231,16 +231,14 @@
   } rstring;
 
   size_t rstrlen( rstring* source );
+  size_t rstrrsvd( rstring* source );
   char* rstrtext( rstring* source );
 
   rstring* rstralloc( size_t reserveLength );
   rstring* rstrzalloc( size_t reserveLength );
 
-  rstring* rstrdup( rstring* source );
-  rstring* rstrdupc( char* source, size_t sourceLength );
-
-  rstring* rstrcpy( rstring* dest, rstring* source );
-  rstring* rstrcpyc( rstring* dest, char* source, size_t sourceLength );
+  rstring* rstrcpy( rstring* source );
+  rstring* rstrcpyc( char* source, size_t sourceLength );
 
   rstring* rstrappendch( rstring* dest, char sourceCh );
 
@@ -661,9 +659,8 @@ int main( int argc, char* argv[] ) {
   argCount = argc;
   argVar = argv;
 
-  rstring* programStr = rstralloc(0);
-  programStr = rstrcpyc( programStr, "Testing", 0 );
-  rstring* programStrCopy = rstrdup(programStr);
+  rstring* programStr = rstrcpyc( "Testing", 0 );
+  rstring* programStrCopy = rstrcpy(programStr);
 
   printf( "[%p]->\"%s\"\n", programStr, rstrtext(programStr) );
   printf( "[%p]->\"%s\"\n", programStrCopy, rstrtext(programStrCopy) );
@@ -707,6 +704,10 @@ int main( int argc, char* argv[] ) {
     return (source ? source->length : 0);
   }
 
+  inline size_t rstrrsvd( rstring* source ) {
+    return (source ? source->rsvdLength : 0);
+  }
+
   inline char* rstrtext( rstring* source ) {
     return (source ? (((char*)source) + sizeof(rstring)) : NULL);
   }
@@ -715,14 +716,20 @@ int main( int argc, char* argv[] ) {
     rstring* newString = NULL;
     size_t   textSize;
 
-    textSize = (reserveLength + 8) & (~7);
+    if( reserveLength == 0 ) {
+      reserveLength = 8;
+    }
+
+    textSize = (reserveLength + 7) & (~7);
     if( reserveLength > textSize ) {
       return NULL;
     }
 
     newString = malloc(sizeof(rstring) + textSize);
     if( newString ) {
+      newString->length = 0;
       newString->rsvdLength = textSize;
+
       *(((char*)newString) + sizeof(rstring)) = '\0';
     }
 
@@ -733,7 +740,11 @@ int main( int argc, char* argv[] ) {
     rstring* newString = NULL;
     size_t   textSize;
 
-    textSize = (reserveLength + 8) & (~7);
+    if( reserveLength == 0 ) {
+      reserveLength = 8;
+    }
+
+    textSize = (reserveLength + 7) & (~7);
     if( reserveLength > textSize ) {
       return NULL;
     }
@@ -746,156 +757,96 @@ int main( int argc, char* argv[] ) {
     return newString;
   }
 
-  rstring* rstrdup( rstring* source ) {
-    rstring* newCopy = NULL;
-    size_t   textSize;
-
-    textSize = source ?
-        (source->rsvdLength + 8) & (~7) : 8;
-
-    if( source && source->length ) {
-      newCopy = malloc(sizeof(rstring) + textSize);
-      if( newCopy ) {
-        strcpy( ((char*)newCopy) + sizeof(rstring),
-            ((char*)source) + sizeof(rstring) );
-      }
-    } else {
-      newCopy = calloc(1, sizeof(rstring) + textSize);
-    }
-
-    if( newCopy ) {
-      newCopy->length = 0;
-      newCopy->rsvdLength = textSize;
-    }
-
-    return newCopy;
-  }
-
-  rstring* rstrdupc( char* source, size_t sourceLength ) {
-    rstring* newCopy = NULL;
-    size_t   textSize;
-
-    textSize = 8;
-    if( source ) {
-      if( sourceLength == 0 ) {
-        sourceLength = strlen(source);
-      }
-      textSize = (sourceLength + 8) & (~7);
-    }
-
-    if( sourceLength > textSize ) {
-      return NULL;
-    }
-
-    if( source && sourceLength ) {
-      newCopy = malloc(sizeof(rstring) + textSize);
-      if( newCopy ) {
-        strcpy( ((char*)newCopy) + sizeof(rstring), source );
-      }
-    } else {
-      newCopy = calloc(1, sizeof(rstring) + textSize);
-    }
-
-    if( newCopy ) {
-      newCopy->length = 0;
-      newCopy->rsvdLength = textSize;
-    }
-
-    return newCopy;
-  }
-
-  rstring* rstrcpy( rstring* dest, rstring* source ) {
-    rstring* tmpDest = NULL;
+  rstring* rstrcpy( rstring* source ) {
+    rstring* newString = NULL;
     size_t sourceLength;
     size_t textSize;
 
     sourceLength = rstrlen(source);
-
     textSize = (sourceLength + 8) & (~7);
     if( sourceLength > textSize ) {
       return NULL;
     }
-
-    if( textSize > dest->rsvdLength ) {
-      tmpDest = realloc(dest, sizeof(rstring) + textSize);
-      if( tmpDest == NULL ) {
-        return NULL;
-      }
-    }
-
-    if( source ) {
-      strcpy( ((char*)dest) + sizeof(rstring),
-          ((char*)source) + sizeof(rstring) );
-    }
-
-    return tmpDest;
-  }
-
-  rstring* rstrcpyc( rstring* dest, char* source, size_t sourceLength ) {
-    rstring* tmpDest = NULL;
-    size_t textSize;
 
     if( source == NULL ) {
-      source = "";
-      sourceLength = 0;
+      newString = calloc(1, sizeof(rstring) + textSize);
+    } else {
+      newString = malloc(sizeof(rstring) + textSize);
+      if( newString ) {
+        newString->length = sourceLength;
+        strcpy( ((char*)newString) + sizeof(rstring),
+            ((char*)source) + sizeof(rstring) );
+      }
     }
 
-    if( sourceLength == 0 ) {
-      sourceLength = strlen(source);
+    if( newString ) {
+      newString->rsvdLength = textSize;
     }
+
+    return newString;
+  }
+
+  rstring* rstrcpyc( char* source, size_t sourceLength ) {
+    rstring* newString = NULL;
+    size_t textSize;
 
     textSize = (sourceLength + 8) & (~7);
     if( sourceLength > textSize ) {
       return NULL;
     }
 
-    if( textSize > dest->rsvdLength ) {
-      tmpDest = realloc(dest, sizeof(rstring) + textSize);
-      if( tmpDest == NULL ) {
-        return NULL;
+    if( source == NULL ) {
+      newString = calloc(1, sizeof(rstring) + textSize);
+    } else {
+      newString = malloc(sizeof(rstring) + textSize);
+      if( newString ) {
+        newString->length = sourceLength;
+        strcpy( ((char*)newString) + sizeof(rstring), source );
       }
     }
 
-printf( "[rstrcpyc] dest: @%p; source: @%p; dest->rsvdLength: %u; textSize: %u; sourceLength: %u\n",
-  dest, source, dest->rsvdLength, textSize, sourceLength );
-    if( source ) {
-      strcpy( ((char*)dest) + sizeof(rstring), source );
+    if( newString ) {
+      newString->rsvdLength = textSize;
     }
 
-    return tmpDest;
+    return newString;
   }
 
   rstring* rstrappendch( rstring* dest, char sourceCh ) {
-    return NULL;
-  }
-
-  rstring* rstrappend( rstring* dest, rstring* source ) {
-    rstring* tmpDest = NULL;
+    char* destText;
     size_t destLength;
-    size_t sourceLength;
+    size_t destRsvd;
     size_t textSize;
 
     destLength = rstrlen(dest);
-    sourceLength = rstrlen(source);
+    destRsvd = rstrrsvd(dest);
 
-    textSize = (destLength + sourceLength + 8) & (~7);
-    if( (destLength > textSize) || (sourceLength > textSize) ) {
-      return NULL;
-    }
-
-    if( textSize > dest->rsvdLength ) {
-      tmpDest = realloc(dest, sizeof(rstring) + textSize);
-      if( tmpDest == NULL ) {
+    if( ((destRsvd + 2) & 7) < 2 ) {
+      textSize = (destLength + 8) & (~7);
+      if( destLength > textSize ) {
         return NULL;
       }
+
+      dest = realloc(dest, sizeof(rstring) + textSize);
+      if( dest == NULL ) {
+        return NULL;
+      }
+      dest->rsvdLength = textSize;
     }
 
-    if( source ) {
-      strcpy( ((char*)dest) + sizeof(rstring) + destLength,
-          ((char*)source) + sizeof(rstring) );
+    destText = rstrtext(dest);
+    if( destText ) {
+      destText[destLength + 0] = sourceCh;
+      destText[destLength + 1] = '\0';
+
+      dest->length += 2;
     }
 
-    return tmpDest;
+    return dest;
+  }
+
+  rstring* rstrappend( rstring* dest, rstring* source ) {
+    return NULL;
   }
 
   rstring* rstrappendc( rstring* dest, char* source, size_t sourceLength ) {
