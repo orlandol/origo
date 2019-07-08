@@ -240,16 +240,16 @@
   rstring* rstrcpy( rstring* source );
   rstring* rstrcpyc( char* source, size_t sourceLength );
 
-  rstring* rstrappendch( rstring* dest, char ch );
+  rstring* rstrappendch( rstring* dest, char matchCh );
 
   rstring* rstrappend( rstring* dest, rstring* source );
   rstring* rstrappendc( rstring* dest, char* source, size_t sourceLength );
 
-  size_t rrevscan( rstring* source, char ch );
-  size_t rrevscanc( char* source, size_t sourceLength, char ch );
+  size_t rrevscan( rstring* source, char matchCh );
+  size_t rrevscanc( char* source, char matchCh );
 
-  size_t rscan( rstring* source, char ch );
-  size_t rscanc( char* source, size_t sourceLength, char ch );
+  size_t rscan( rstring* source, char matchCh );
+  size_t rscanc( char* source, char matchCh );
 
   rstring* rsubstr( rstring* source, size_t startPos, size_t endPos );
   rstring* rsubstrc( char* source, size_t sourceLength, size_t startPos, size_t endPos );
@@ -653,8 +653,9 @@ int main( int argc, char* argv[] ) {
   argCount = argc;
   argVar = argv;
 
-  rstring* programStr = rstrcpyc( "Testing", 0 );
+  rstring* programStr = rstrcpyc( "program", 0 );
   rstring* programStrCopy = rstrcpy(programStr);
+  rstring* programSubStr = NULL;
 
   printf( "[%p]->\"%s\"\n", programStr, rstrtext(programStr) );
   printf( "[%p]->\"%s\"\n", programStrCopy, rstrtext(programStrCopy) );
@@ -679,17 +680,34 @@ int main( int argc, char* argv[] ) {
   printf( "[%p]->\"%s\"\n", programStr, rstrtext(programStr) );
   printf( "[%p]->\"%s\"\n", programStrCopy, rstrtext(programStrCopy) );
 
+  programSubStr = rsubstr(programStr, rscan(programStr, 'p'), rscan(programStr, 'm'));
+  programSubStr = rstrappendch( programSubStr, ' ' );
+  programSubStr = rstrappendch( programSubStr, 't' );
+  programSubStr = rstrappendch( programSubStr, 'e' );
+  programSubStr = rstrappendch( programSubStr, 's' );
+  programSubStr = rstrappendch( programSubStr, 't' );
+  programSubStr = rstrappendch( programSubStr, 'i' );
+  programSubStr = rstrappendch( programSubStr, 'n' );
+  programSubStr = rstrappendch( programSubStr, 'g' );
+  programSubStr = rstrappendch( programSubStr, '7' );
+  programSubStr = rstrappendch( programSubStr, '8' );
+  programSubStr = rstrappendch( programSubStr, '9' );
+  printf( "[%p]->\"%s\"\n", programSubStr, rstrtext(programSubStr) );
+
   free( programStr );
   programStr = NULL;
 
   free( programStrCopy );
   programStrCopy = NULL;
 
+  free( programSubStr );
+  programSubStr = NULL;
+
   printf( "[%p]\n", programStr );
   printf( "[%p]\n", programStrCopy );
 
-  printf( "Reverse scan 'b' in 'abcdcba': %u\n", rrevscanc("abcdcba", 7, 'b') );
-  printf( "Scan 'b' forward in 'abcdcba': %u\n", rrevscanc("abcdcba", 7, 'b') );
+  printf( "Reverse scan 'b' in 'abcdcba': %u\n", rrevscanc("abcdcba", 'b') );
+  printf( "Scan 'b' forward in 'abcdcba': %u\n", rscanc("abcdcba", 'b') );
 
   return 0;
 }
@@ -934,124 +952,164 @@ int main( int argc, char* argv[] ) {
     return dest;
   }
 
-  size_t rrevscan( rstring* source, char ch ) {
-    char* curCh;
+  size_t rscan( rstring* source, char matchCh ) {
+    char* sourceCh;
     size_t sourceLength;
+    size_t matchIndex;
 
-    if( source == 0 ) {
+    sourceCh = rstrtext(source);
+    sourceLength = rstrlen(source);
+
+    if( !(sourceCh && sourceLength) ) {
       return (-1);
     }
+
+    for( matchIndex = 0; matchIndex < sourceLength; matchIndex++ ) {
+      if( *sourceCh == '\0' ) {
+        break;
+      }
+
+      if( *sourceCh == matchCh ) {
+        return matchIndex;
+      }
+      sourceCh++;
+    }
+
+    return (-1);
+  }
+
+  size_t rscanc( char* source, char matchCh ) {
+    char* sourceCh;
+    size_t matchIndex;
+
+    sourceCh = source;
+
+    if( sourceCh == NULL ) {
+      return (-1);
+    }
+
+    matchIndex = 0;
+    while( *sourceCh ) {
+      if( *sourceCh == matchCh ) {
+        return matchIndex;
+      }
+      sourceCh++;
+      matchIndex++;
+    }
+
+    return (-1);
+  }
+
+  size_t rrevscan( rstring* source, char matchCh ) {
+    char* sourceCh;
+    size_t sourceLength;
+    size_t matchIndex;
 
     sourceLength = rstrlen(source);
-    curCh = rstrtext(source) + sourceLength;
+    sourceCh = rstrtext(source) + sourceLength;
 
-    while( sourceLength ) {
-      if( *curCh == ch ) {
+    if( source == NULL ) {
+      return (-1);
+    }
+
+    while( sourceLength && (*sourceCh) ) {
+      if( (*sourceCh) == matchCh ) {
         return sourceLength;
       }
+
       sourceLength--;
-      curCh--;
     }
 
     return (-1);
   }
 
-  size_t rrevscanc( char* source, size_t sourceLength, char ch ) {
-    char* curCh;
-    size_t result;
+  size_t rrevscanc( char* source, char matchCh ) {
+    char* sourceCh;
+    size_t sourceIndex;
+    size_t matchIndex = (-1);
 
-    if( source == 0 ) {
+    if( source == NULL ) {
       return (-1);
     }
 
-    curCh = source;
+    sourceCh = source;
 
-    if( sourceLength == 0 ) {
-      while( *curCh ) {
-        if( *curCh == ch ) {
-          result = sourceLength;
-        }
-        sourceLength++;
-        curCh--;
+    sourceIndex = 0;
+    while( (*sourceCh) ) {
+      if( (*sourceCh) == matchCh ) {
+        matchIndex = sourceIndex;
       }
+
+      sourceIndex++;
+      sourceCh++;
     }
 
-    while( sourceLength ) {
-      if( *curCh == ch ) {
-        return sourceLength;
-      }
-      sourceLength--;
-      curCh--;
-    }
-
-    return (-1);
-  }
-
-  size_t rscan( rstring* source, char ch ) {
-    char* curCh;
-    size_t sourceLength;
-    size_t result;
-
-    if( source == 0 ) {
-      return (-1);
-    }
-
-    sourceLength = rstrlen(source);
-    curCh = rstrtext(source);
-
-    result = 0;
-    while( sourceLength ) {
-      if( *curCh == ch ) {
-        return result;
-      }
-      result++;
-      sourceLength--;
-      curCh++;
-    }
-
-    return (-1);
-  }
-
-  size_t rscanc( char* source, size_t sourceLength, char ch ) {
-    char* curCh;
-    size_t result;
-
-    if( source == 0 ) {
-      return (-1);
-    }
-
-    curCh = source;
-
-    if( sourceLength == 0 ) {
-      while( *curCh ) {
-        if( *curCh == ch ) {
-          return sourceLength;
-        }
-        sourceLength++;
-        curCh++;
-      }
-    }
-
-    result = 0;
-    while( sourceLength ) {
-      if( *curCh == ch ) {
-        return result;
-      }
-      result++;
-      sourceLength--;
-      curCh++;
-    }
-
-    return (-1);
+    return matchIndex;
   }
 
   rstring* rsubstr( rstring* source, size_t startPos, size_t endPos ) {
-    return NULL;
+    rstring* newStr;
+    char* destText;
+    char* sourceText;
+    size_t sourceLength;
+    size_t subLength;
+
+    if( source == NULL ) {
+      return NULL;
+    }
+
+    sourceLength = rstrlen(source);
+    sourceText = rstrtext(source);
+
+    subLength = (endPos - startPos) + 1;
+    if( subLength >= sourceLength ) {
+      return NULL;
+    }
+
+    newStr = rstralloc(subLength);
+    if( newStr == NULL ) {
+      return NULL;
+    }
+    newStr->length = subLength;
+
+    sourceText = rstrtext(source);
+    destText = rstrtext(newStr);
+    memcpy( destText, (sourceText + startPos), subLength );
+    destText[subLength] = '\0';
+
+    return newStr;
   }
 
   rstring* rsubstrc( char* source, size_t sourceLength,
       size_t startPos, size_t endPos ) {
-    return NULL;
+    rstring* newStr;
+    char* destText;
+    size_t subLength;
+
+    if( source == NULL ) {
+      return NULL;
+    }
+
+    if( sourceLength == 0 ) {
+      sourceLength = strlen(source);
+    }
+
+    subLength = (endPos - startPos) + 1;
+    if( subLength >= sourceLength ) {
+      return NULL;
+    }
+
+    newStr = rstralloc(subLength);
+    if( newStr == NULL ) {
+      return NULL;
+    }
+    newStr->length = subLength;
+
+    destText = rstrtext(newStr);
+    memcpy( destText, (source + startPos), subLength );
+    destText[subLength] = '\0';
+
+    return newStr;
   }
 
 /*

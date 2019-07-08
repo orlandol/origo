@@ -1,0 +1,87 @@
+program Retineo
+
+/*
+ *  Base types
+ */
+  alias int:8 int8 = 0
+  alias int:16 int16 = 0
+  alias int:32 int32 = 0
+
+  alias uint:8 uint8 = 0
+  alias uint:16 uint16 = 0
+  alias uint:32 uint32 = 0
+
+  type uint32 usize = 0
+  type uint64 ufsize = 0
+
+/*
+ *  Call specs
+ */
+
+  callspec default
+    paramOrder leftToRight
+    paramAlign sizeof(uint) / 8
+    stackClean callee
+
+    frameEnter
+      push    ebp
+      mov     ebp, esp
+    end
+
+    frameExit
+      mov     esp, ebp
+      pop     ebp
+    end
+  end
+
+  callspec cdecl
+    paramOrder leftToRight
+    paramAlign sizeof(uint) / 8
+    stackClean caller
+
+    frameEnter
+      push    ebp
+      mov     ebp, esp
+    end
+
+    frameExit
+      mov     esp, ebp
+      pop     ebp
+    end
+  end
+
+/*
+ *  Windows declarations
+ */
+
+  import func cdecl ExitProcess( uint uExitCode )
+    from 'kernel32.dll'
+
+  import func @ LocalAlloc( UINT uFlags, SIZE_T uBytes )
+    from 'kernel32.dll'
+
+/*
+ *  Memory management
+ */
+
+  func alloc(
+
+/*
+ *  File object
+ */
+  object file
+  end
+
+  interface fileRead implements file
+    method ufsize read( @dest, ufsize size )
+    method ufsize write( @source, ufsize soze )
+  end
+
+  interface fileWrite implements file
+  end
+
+  interface file inherits fileRead, fileWrite
+  end
+
+run
+end
