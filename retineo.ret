@@ -1,18 +1,50 @@
 program Retineo
 
 /*
+ * Executable meta data
+ */
+  versioninfo
+    companyName 'Retineo'
+    fileVersionString '0.01'
+
+    fileVersion 0.01.0.0
+    productVersion 0.01.0.0
+    fileFlagsMask 0
+    fileFlags 0
+    fileOS VOS_WINDOWS32
+    fileType VFT_APP
+    FileSubtype 0
+  end
+
+/*
  *  Base types
  */
-  alias int:8 int8 = 0
-  alias int:16 int16 = 0
-  alias int:32 int32 = 0
 
-  alias uint:8 uint8 = 0
-  alias uint:16 uint16 = 0
-  alias uint:32 uint32 = 0
+  type int:8 int8 = 0
+  type int:16 int16 = 0
+  type int:32 int32 = 0
+  type int:64 int64 = 0
+
+  type uint:8 uint8 = 0
+  type uint:16 uint16 = 0
+  type uint:32 uint32 = 0
+  type uint:64 uint64 = 0
 
   type uint32 usize = 0
   type uint64 ufsize = 0
+
+  type uint:1 bool = 0
+
+/*
+ *  Constants
+ */
+
+  const
+    @null = @0
+
+    bool false = 0
+    bool true = 1
+  end
 
 /*
  *  Call specs
@@ -23,28 +55,28 @@ program Retineo
     paramAlign sizeof(uint) / 8
     stackClean callee
 
-    frameEnter
+    prologue
       push    ebp
       mov     ebp, esp
     end
 
-    frameExit
+    epilogue
       mov     esp, ebp
       pop     ebp
     end
   end
 
   callspec cdecl
-    paramOrder leftToRight
+    paramOrder rightToLeft
     paramAlign sizeof(uint) / 8
     stackClean caller
 
-    frameEnter
+    prologue
       push    ebp
       mov     ebp, esp
     end
 
-    frameExit
+    epilogue
       mov     esp, ebp
       pop     ebp
     end
@@ -64,7 +96,9 @@ program Retineo
  *  Memory management
  */
 
-  func alloc(
+  func @ alloc( usize size )
+    return null
+  end
 
 /*
  *  File object

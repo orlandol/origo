@@ -24,9 +24,9 @@
       [union '(' TYPESPEC[, ...] ')' IDENT[, ...]]
     end
 
-    alias TYPENAME IDENT ['=' CONSTEXPR][, ...]
+    type TYPENAME IDENT ['=' CONSTEXPR][, ...]
 
-    type TYPESPEC IDENT ['=' CONSTEXPR][, ...]
+    newtype TYPESPEC IDENT ['=' CONSTEXPR][, ...]
 
     const
       [TYPESPEC IDENT '=' CONSTEXPR[, ...]]
