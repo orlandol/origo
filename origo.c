@@ -590,14 +590,25 @@
  *  Lexer declarations
  */
 
-  typedef union _IntVal {
-    unsigned valUint;
-    int valInt;
-  } IntVal;
+  typedef struct SourceFile {
+    FILE* handle;
+    rstring* fileName;
+    unsigned line;
+    unsigned col;
+    unsigned nextLine;
+    unsigned nextCol;
+    char curCh;
+    char nextCh;
+  } SourceFile;
 
-  bool ReadIdent( FILE* sourceFile, char** ident );
-  bool ReadInt( FILE* sourceFile, unsigned* intType, IntVal* intVar );
-  bool ReadString( FILE* sourceFile, char** strVar );
+  SourceFile* OpenSource( rstring* name );
+  void CloseSource( SourceFile** sourceFile );
+
+  bool ReadChar( SourceFile* sourceFile );
+
+  rstring* ReadIdent( SourceFile* sourceFile, rstring* destIdent );
+  bool ReadInt( FILE* sourceFile, void* destInt );
+  rstring* ReadString( FILE* sourceFile, rstring* destString );
 
 /*
  *  Code generator declarations
@@ -1123,6 +1134,29 @@ int main( int argc, char* argv[] ) {
 /*
  *  Lexer implementation
  */
+
+  SourceFile* OpenSource( rstring* name ) {
+    return NULL;
+  }
+
+  void CloseSource( SourceFile** sourceFile ) {
+  }
+
+  bool ReadChar( SourceFile* sourceFile ) {
+    return false;
+  }
+
+  rstring* ReadIdent( SourceFile* sourceFile, rstring* destIdent ) {
+    return NULL;
+  }
+
+  bool ReadInt( FILE* sourceFile, void* destInt ) {
+    return false;
+  }
+
+  rstring* ReadString( FILE* sourceFile, rstring* destString ) {
+    return NULL;
+  }
 
 /*
  *  Code generator implementation

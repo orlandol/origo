@@ -47,13 +47,13 @@ program Retineo
   end
 
 /*
- *  Call specs
+ *  Call convention specifications
  */
 
   callspec default
     paramOrder leftToRight
     paramAlign sizeof(uint) / 8
-    stackClean callee
+    stackCleanup callee
 
     prologue
       push    ebp
@@ -66,30 +66,40 @@ program Retineo
     end
   end
 
-  callspec cdecl
+  callspec cdecl inherits default
     paramOrder rightToLeft
-    paramAlign sizeof(uint) / 8
-    stackClean caller
+    stackCleanup caller
+  end
 
-    prologue
-      push    ebp
-      mov     ebp, esp
-    end
+  callspec stdcall inherits default
+    paramOrder rightToLeft
+    stackCleanup callee
+  end
 
-    epilogue
-      mov     esp, ebp
-      pop     ebp
-    end
+  callspec WINAPI inherits stdcall
   end
 
 /*
  *  Windows declarations
  */
 
-  import func cdecl ExitProcess( uint uExitCode )
+  import func ExitProcess( uint uExitCode )
     from 'kernel32.dll'
 
-  import func @ LocalAlloc( UINT uFlags, SIZE_T uBytes )
+  type uint UINT
+  type usize SIZE_T
+
+  const
+    UINT LHND = 0x0042
+    UINT LMEM_FIXED = 0x0000
+    UINT LMEM_MOVEABLE = 0x0002
+    UINT LMEM_ZEROINIT = 0x0040
+    UINT LPTR = 0x0040
+    UINT NONZEROLHND = LMEM_MOVEABLE
+    UINT NONZEROLPTR = LMEM_FIXED
+  end
+
+  import func stdcall @ LocalAlloc( UINT uFlags, SIZE_T uBytes )
     from 'kernel32.dll'
 
 /*
@@ -97,13 +107,16 @@ program Retineo
  */
 
   func @ alloc( usize size )
-    return null
+    return LocalAlloc(LPTR, size)
   end
 
 /*
- *  File object
+ *  Base file object
  */
   object file
+  end
+
+  abstract fileio implements file
   end
 
   interface fileRead implements file
@@ -111,10 +124,19 @@ program Retineo
     method ufsize write( @source, ufsize soze )
   end
 
+  interface fileRead implements file
+  end
+
+  interface fileNoRead implements file
+  end
+
   interface fileWrite implements file
   end
 
-  interface file inherits fileRead, fileWrite
+  interface fileNoWrite implements file
+  end
+
+  interface file inherits fileRead, fileNoWrite
   end
 
 run
