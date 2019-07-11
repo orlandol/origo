@@ -237,8 +237,8 @@
   rstring* rstralloc( size_t reserveLength );
   rstring* rstrzalloc( size_t reserveLength );
 
-  rstring* rstrcpy( rstring* source );
-  rstring* rstrcpyc( char* source, size_t sourceLength );
+  rstring* rstrcopy( rstring* source );
+  rstring* rstrcopyc( char* source, size_t sourceLength );
 
   rstring* rstrappendch( rstring* dest, char matchCh );
 
@@ -601,7 +601,7 @@
     char nextCh;
   } SourceFile;
 
-  SourceFile* OpenSource( rstring* name );
+  SourceFile* OpenSource( char* fileName, size_t nameLength );
   void CloseSource( SourceFile** sourceFile );
 
   bool ReadChar( SourceFile* sourceFile );
@@ -664,61 +664,12 @@ int main( int argc, char* argv[] ) {
   argCount = argc;
   argVar = argv;
 
-  rstring* programStr = rstrcpyc( "program", 0 );
-  rstring* programStrCopy = rstrcpy(programStr);
-  rstring* programSubStr = NULL;
+  SourceFile* retSource = OpenSource(argv[1], 0);
 
-  printf( "[%p]->\"%s\"\n", programStr, rstrtext(programStr) );
-  printf( "[%p]->\"%s\"\n", programStrCopy, rstrtext(programStrCopy) );
+  printf( "curCh: %c; nextCh: %c\n",
+      retSource->curCh, retSource->nextCh );
 
-  programStr = rstrappendch( programStr, ' ' );
-  programStr = rstrappendch( programStr, 't' );
-  programStr = rstrappendch( programStr, 'e' );
-  programStr = rstrappendch( programStr, 's' );
-  programStr = rstrappendch( programStr, 't' );
-  programStr = rstrappendch( programStr, 'i' );
-  programStr = rstrappendch( programStr, 'n' );
-  programStr = rstrappendch( programStr, 'g' );
-  programStr = rstrappendch( programStr, '1' );
-  programStr = rstrappendch( programStr, '2' );
-  programStr = rstrappendch( programStr, '3' );
-
-  programStrCopy = rstrappendc( programStrCopy, " testing", 0 );
-  programStrCopy = rstrappendch( programStrCopy, '4' );
-  programStrCopy = rstrappendch( programStrCopy, '5' );
-  programStrCopy = rstrappendch( programStrCopy, '6' );
-
-  printf( "[%p]->\"%s\"\n", programStr, rstrtext(programStr) );
-  printf( "[%p]->\"%s\"\n", programStrCopy, rstrtext(programStrCopy) );
-
-  programSubStr = rsubstr(programStr, rscan(programStr, 'p'), rscan(programStr, 'm'));
-  programSubStr = rstrappendch( programSubStr, ' ' );
-  programSubStr = rstrappendch( programSubStr, 't' );
-  programSubStr = rstrappendch( programSubStr, 'e' );
-  programSubStr = rstrappendch( programSubStr, 's' );
-  programSubStr = rstrappendch( programSubStr, 't' );
-  programSubStr = rstrappendch( programSubStr, 'i' );
-  programSubStr = rstrappendch( programSubStr, 'n' );
-  programSubStr = rstrappendch( programSubStr, 'g' );
-  programSubStr = rstrappendch( programSubStr, '7' );
-  programSubStr = rstrappendch( programSubStr, '8' );
-  programSubStr = rstrappendch( programSubStr, '9' );
-  printf( "[%p]->\"%s\"\n", programSubStr, rstrtext(programSubStr) );
-
-  free( programStr );
-  programStr = NULL;
-
-  free( programStrCopy );
-  programStrCopy = NULL;
-
-  free( programSubStr );
-  programSubStr = NULL;
-
-  printf( "[%p]\n", programStr );
-  printf( "[%p]\n", programStrCopy );
-
-  printf( "Reverse scan 'b' in 'abcdcba': %u\n", rrevscanc("abcdcba", 'b') );
-  printf( "Scan 'b' forward in 'abcdcba': %u\n", rscanc("abcdcba", 'b') );
+  CloseSource( &retSource );
 
   return 0;
 }
@@ -788,7 +739,7 @@ int main( int argc, char* argv[] ) {
     return newString;
   }
 
-  rstring* rstrcpy( rstring* source ) {
+  rstring* rstrcopy( rstring* source ) {
     rstring* newString = NULL;
     size_t sourceLength;
     size_t textSize;
@@ -815,7 +766,7 @@ int main( int argc, char* argv[] ) {
     return newString;
   }
 
-  rstring* rstrcpyc( char* source, size_t sourceLength ) {
+  rstring* rstrcopyc( char* source, size_t sourceLength ) {
     rstring* newString = NULL;
     size_t textSize;
 
@@ -1135,15 +1086,105 @@ int main( int argc, char* argv[] ) {
  *  Lexer implementation
  */
 
-  SourceFile* OpenSource( rstring* name ) {
+  SourceFile* OpenSource( char* fileName, size_t nameLength ) {
+    SourceFile* newSource = NULL;
+
+    if( !(fileName && (*fileName)) ) {
+      goto ReturnError;
+    }
+
+    newSource = calloc(1, sizeof(SourceFile));
+    if( newSource == NULL ) {
+      goto ReturnError;
+    }
+
+    newSource->fileName = rstrcopyc(fileName, nameLength);
+    if( newSource->fileName == NULL ) {
+      goto ReturnError;
+    }
+
+    newSource->handle = fopen(fileName, "rb");
+    if( newSource->handle == NULL ) {
+      goto ReturnError;
+    }
+
+    newSource->line = 1;
+    newSource->col = 1;
+    newSource->nextLine = 1;
+    newSource->nextCol = 1;
+
+    ReadChar( newSource );
+    ReadChar( newSource );
+
+    newSource->line = 1;
+    newSource->col = 1;
+
+    return newSource;
+
+  ReturnError:
+    CloseSource( &newSource );
+
     return NULL;
   }
 
   void CloseSource( SourceFile** sourceFile ) {
+    if( sourceFile ) {
+      if( (*sourceFile) ) {
+        if( (*sourceFile)->handle ) {
+          fclose( (*sourceFile)->handle );
+          (*sourceFile)->handle = NULL;
+        }
+
+        if( (*sourceFile)->fileName ) {
+          free( (*sourceFile)->fileName );
+          (*sourceFile)->fileName = NULL;
+        }
+
+        free( (*sourceFile) );
+        (*sourceFile) = NULL;
+      }
+    }
   }
 
   bool ReadChar( SourceFile* sourceFile ) {
-    return false;
+    unsigned colInc = 1;
+
+    if( !(sourceFile && sourceFile->handle) ) {
+      return false;
+    }
+
+    if( sourceFile->curCh == 10 ) {
+      sourceFile->line++;
+      sourceFile->col = 1;
+      colInc = 0;
+    }
+
+    sourceFile->curCh = sourceFile->nextCh;
+    sourceFile->nextCh = 0;
+
+    if( fread(&(sourceFile->nextCh), 1, sizeof(char),
+        sourceFile->handle) != sizeof(char) ) {
+      return false;
+    }
+
+    if( sourceFile->nextCh == 13 ) {
+      if( fread(&(sourceFile->nextCh), 1, sizeof(char),
+          sourceFile->handle) != sizeof(char) ) {
+        return false;
+      }
+
+      if( sourceFile->nextCh == 10 ) {
+        if( fseek(sourceFile->handle, -1, SEEK_CUR) == 0 ) {
+          return false;
+        }
+      }
+
+      sourceFile->nextCh = 10;
+    }
+
+    sourceFile->col += colInc;
+
+    return true;
   }
 
   rstring* ReadIdent( SourceFile* sourceFile, rstring* destIdent ) {

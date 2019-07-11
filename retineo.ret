@@ -116,9 +116,6 @@ program Retineo
   object file
   end
 
-  abstract fileio implements file
-  end
-
   interface fileRead implements file
     method ufsize read( @dest, ufsize size )
     method ufsize write( @source, ufsize soze )
@@ -136,7 +133,7 @@ program Retineo
   interface fileNoWrite implements file
   end
 
-  interface file inherits fileRead, fileNoWrite
+  abstract file inherits fileRead, fileNoWrite
   end
 
 run
