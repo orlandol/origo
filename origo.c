@@ -601,8 +601,8 @@
     char nextCh;
   } SourceFile;
 
-  SourceFile* OpenSource( char* fileName, size_t nameLength );
-  void CloseSource( SourceFile** sourceFile );
+  SourceFile* OpenRet( char* fileName, size_t nameLength );
+  void CloseRet( SourceFile** sourceFile );
 
   bool ReadChar( SourceFile* sourceFile );
 
@@ -660,16 +660,35 @@
  *  Main program
  */
 
+  void PrintBanner() {
+    printf( "\nOrigo Alpha\n" );
+    printf( "Copyright 2019 Orlando Llanes\n\n" );
+  }
+
+  void PrintUsage() {
+    printf( "usage: origo source[.ret] [binary[.ext]]\n" );
+  }
+
 int main( int argc, char* argv[] ) {
   argCount = argc;
   argVar = argv;
 
-  SourceFile* retSource = OpenSource(argv[1], 0);
+  PrintBanner();
 
-  printf( "curCh: %c; nextCh: %c\n",
-      retSource->curCh, retSource->nextCh );
+  if( argc < 2 ) {
+    PrintUsage();
+    return 1;
+  }
 
-  CloseSource( &retSource );
+  SourceFile* retSource = OpenRet(argv[1], 0);
+
+  printf( "curCh: %u; line: %u; col: %u\n",
+      retSource->curCh, retSource->line, retSource->col );
+
+  printf( "nextCh: %u; nextLine: %u; nextCol: %u\n",
+      retSource->nextCh, retSource->nextLine, retSource->nextCol );
+
+  CloseRet( &retSource );
 
   return 0;
 }
@@ -1086,7 +1105,7 @@ int main( int argc, char* argv[] ) {
  *  Lexer implementation
  */
 
-  SourceFile* OpenSource( char* fileName, size_t nameLength ) {
+  SourceFile* OpenRet( char* fileName, size_t nameLength ) {
     SourceFile* newSource = NULL;
 
     if( !(fileName && (*fileName)) ) {
@@ -1111,7 +1130,7 @@ int main( int argc, char* argv[] ) {
     newSource->line = 1;
     newSource->col = 1;
     newSource->nextLine = 1;
-    newSource->nextCol = 1;
+    newSource->nextCol = 0;
 
     ReadChar( newSource );
     ReadChar( newSource );
@@ -1122,12 +1141,12 @@ int main( int argc, char* argv[] ) {
     return newSource;
 
   ReturnError:
-    CloseSource( &newSource );
+    CloseRet( &newSource );
 
     return NULL;
   }
 
-  void CloseSource( SourceFile** sourceFile ) {
+  void CloseRet( SourceFile** sourceFile ) {
     if( sourceFile ) {
       if( (*sourceFile) ) {
         if( (*sourceFile)->handle ) {
@@ -1162,6 +1181,9 @@ int main( int argc, char* argv[] ) {
     sourceFile->curCh = sourceFile->nextCh;
     sourceFile->nextCh = 0;
 
+    sourceFile->line = sourceFile->nextLine;
+    sourceFile->col = sourceFile->nextCol;
+
     if( fread(&(sourceFile->nextCh), 1, sizeof(char),
         sourceFile->handle) != sizeof(char) ) {
       return false;
@@ -1182,7 +1204,7 @@ int main( int argc, char* argv[] ) {
       sourceFile->nextCh = 10;
     }
 
-    sourceFile->col += colInc;
+    sourceFile->nextCol += colInc;
 
     return true;
   }
