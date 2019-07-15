@@ -1,4 +1,5 @@
 
+#include <ctype.h>
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
@@ -240,7 +241,7 @@
   rstring* rstrcopy( rstring* source );
   rstring* rstrcopyc( char* source, size_t sourceLength );
 
-  rstring* rstrappendch( rstring* dest, char matchCh );
+  rstring* rstrappendch( rstring* dest, char ch );
 
   rstring* rstrappend( rstring* dest, rstring* source );
   rstring* rstrappendc( rstring* dest, char* source, size_t sourceLength );
@@ -590,25 +591,31 @@
  *  Lexer declarations
  */
 
-  typedef struct SourceFile {
+  typedef struct RetFile {
     FILE* handle;
     rstring* fileName;
     unsigned line;
     unsigned col;
-    unsigned nextLine;
-    unsigned nextCol;
     char curCh;
     char nextCh;
-  } SourceFile;
+  } RetFile;
 
-  SourceFile* OpenRet( char* fileName, size_t nameLength );
-  void CloseRet( SourceFile** sourceFile );
+  RetFile* OpenRet( char* fileName, size_t nameLength );
+  void CloseRet( RetFile** source );
 
-  bool ReadChar( SourceFile* sourceFile );
+  bool ReadChar( RetFile* source );
 
-  rstring* ReadIdent( SourceFile* sourceFile, rstring* destIdent );
-  bool ReadInt( FILE* sourceFile, void* destInt );
-  rstring* ReadString( FILE* sourceFile, rstring* destString );
+  bool SkipSpace( RetFile* source );
+  bool SkipComments( RetFile* source );
+
+  bool ReadIdent( RetFile* source, rstring** ident );
+
+  bool ReadBinNum( RetFile* source, unsigned* num );
+  bool ReadOctalNum( RetFile* source, unsigned* num );
+  bool ReadHexNum( RetFile* source, unsigned* num );
+  bool ReadNum( RetFile* source, unsigned* num );
+
+  bool ReadString( RetFile* source, rstring** string );
 
 /*
  *  Code generator declarations
@@ -680,13 +687,27 @@ int main( int argc, char* argv[] ) {
     return 1;
   }
 
-  SourceFile* retSource = OpenRet(argv[1], 0);
+  RetFile* retSource = OpenRet(argv[1], 0);
 
-  printf( "curCh: %u; line: %u; col: %u\n",
-      retSource->curCh, retSource->line, retSource->col );
+  printf( "curCh: %c (%u); line: %u; col: %u; nextCh: %c (%u)\n",
+      retSource->curCh, retSource->curCh,
+      retSource->line, retSource->col,
+      retSource->nextCh, retSource->nextCh );
 
-  printf( "nextCh: %u; nextLine: %u; nextCol: %u\n",
-      retSource->nextCh, retSource->nextLine, retSource->nextCol );
+  SkipComments( retSource );
+
+  rstring* strval = rstrzalloc(0);
+  ReadString( retSource, &strval );
+  printf( "ReadString: strval = '%s'; length = %u\n", rstrtext(strval), rstrlen(strval) );
+  if( strval ) {
+    free( strval );
+    strval = NULL;
+  }
+
+  printf( "curCh: %c (%u); line: %u; col: %u; nextCh: %c (%u)\n",
+      retSource->curCh, retSource->curCh,
+      retSource->line, retSource->col,
+      retSource->nextCh, retSource->nextCh );
 
   CloseRet( &retSource );
 
@@ -836,6 +857,7 @@ int main( int argc, char* argv[] ) {
       }
       dest = destTemp;
 
+      dest->length = destLength;
       dest->rsvdLength = destSize;
     }
 
@@ -1105,14 +1127,14 @@ int main( int argc, char* argv[] ) {
  *  Lexer implementation
  */
 
-  SourceFile* OpenRet( char* fileName, size_t nameLength ) {
-    SourceFile* newSource = NULL;
+  RetFile* OpenRet( char* fileName, size_t nameLength ) {
+    RetFile* newSource = NULL;
 
     if( !(fileName && (*fileName)) ) {
       goto ReturnError;
     }
 
-    newSource = calloc(1, sizeof(SourceFile));
+    newSource = calloc(1, sizeof(RetFile));
     if( newSource == NULL ) {
       goto ReturnError;
     }
@@ -1129,8 +1151,6 @@ int main( int argc, char* argv[] ) {
 
     newSource->line = 1;
     newSource->col = 1;
-    newSource->nextLine = 1;
-    newSource->nextCol = 0;
 
     ReadChar( newSource );
     ReadChar( newSource );
@@ -1146,79 +1166,369 @@ int main( int argc, char* argv[] ) {
     return NULL;
   }
 
-  void CloseRet( SourceFile** sourceFile ) {
-    if( sourceFile ) {
-      if( (*sourceFile) ) {
-        if( (*sourceFile)->handle ) {
-          fclose( (*sourceFile)->handle );
-          (*sourceFile)->handle = NULL;
+  void CloseRet( RetFile** source ) {
+    if( source ) {
+      if( (*source) ) {
+        if( (*source)->handle ) {
+          fclose( (*source)->handle );
+          (*source)->handle = NULL;
         }
 
-        if( (*sourceFile)->fileName ) {
-          free( (*sourceFile)->fileName );
-          (*sourceFile)->fileName = NULL;
+        if( (*source)->fileName ) {
+          free( (*source)->fileName );
+          (*source)->fileName = NULL;
         }
 
-        free( (*sourceFile) );
-        (*sourceFile) = NULL;
+        free( (*source) );
+        (*source) = NULL;
       }
     }
   }
 
-  bool ReadChar( SourceFile* sourceFile ) {
+  bool ReadChar( RetFile* source ) {
     unsigned colInc = 1;
+    char tmpCh = 0;
 
-    if( !(sourceFile && sourceFile->handle) ) {
+    if( !(source && source->handle) ) {
       return false;
     }
 
-    if( sourceFile->curCh == 10 ) {
-      sourceFile->line++;
-      sourceFile->col = 1;
+    if( source->curCh == 10 ) {
+      source->line++;
+      source->col = 1;
       colInc = 0;
     }
 
-    sourceFile->curCh = sourceFile->nextCh;
-    sourceFile->nextCh = 0;
+    source->curCh = source->nextCh;
+    source->nextCh = 0;
 
-    sourceFile->line = sourceFile->nextLine;
-    sourceFile->col = sourceFile->nextCol;
-
-    if( fread(&(sourceFile->nextCh), 1, sizeof(char),
-        sourceFile->handle) != sizeof(char) ) {
+    if( fread(&(source->nextCh), 1, sizeof(char),
+        source->handle) != sizeof(char) ) {
       return false;
     }
 
-    if( sourceFile->nextCh == 13 ) {
-      if( fread(&(sourceFile->nextCh), 1, sizeof(char),
-          sourceFile->handle) != sizeof(char) ) {
+    if( source->nextCh == 13 ) {
+      if( fread(&tmpCh, 1, sizeof(char),
+          source->handle) != sizeof(char) ) {
         return false;
       }
 
-      if( sourceFile->nextCh == 10 ) {
-        if( fseek(sourceFile->handle, -1, SEEK_CUR) == 0 ) {
+      if( tmpCh != 10 ) {
+        if( fseek(source->handle, -1, SEEK_CUR) == 0 ) {
           return false;
         }
       }
 
-      sourceFile->nextCh = 10;
+      source->nextCh = 10;
     }
 
-    sourceFile->nextCol += colInc;
+    source->col += colInc;
 
     return true;
   }
 
-  rstring* ReadIdent( SourceFile* sourceFile, rstring* destIdent ) {
-    return NULL;
-  }
+  bool SkipSpace( RetFile* source ) {
+    if( source == NULL ) {
+      return false;
+    }
 
-  bool ReadInt( FILE* sourceFile, void* destInt ) {
+    if( isspace(source->curCh) ) {
+      while( isspace(source->curCh) ) {
+        if( !ReadChar(source) ) {
+          return false;
+        }
+      }
+      return true;
+    }
+
     return false;
   }
 
-  rstring* ReadString( FILE* sourceFile, rstring* destString ) {
-    return NULL;
+  bool SkipComments( RetFile* source ) {
+    unsigned level;
+    unsigned loopFlags;
+
+    if( source == NULL ) {
+      return false;
+    }
+
+    do {
+      loopFlags = 0;
+
+      // Skip space characters
+      if( isspace(source->curCh) ) {
+        while( isspace(source->curCh) ) {
+          if( !ReadChar(source) ) {
+            return false;
+          }
+        }
+        loopFlags |= 1;
+      }
+
+      // Skip single-line comments
+      if( (source->curCh == '/') && (source->nextCh == '/') ) {
+        do {
+          if( !ReadChar(source) ) {
+            return false;
+          }
+        } while( source->curCh != 10 );
+        loopFlags |= (1 << 1);
+      }
+
+      // Skip multi-line comments
+      if( (source->curCh == '/') && (source->nextCh == '*') ) {
+        level = 0;
+        do {
+          if( (source->curCh == '/') && (source->nextCh == '*') ) {
+            if( level == (-1) ) {
+              return false;
+            }
+            level++;
+            if( !(ReadChar(source) && ReadChar(source)) ) {
+              return false;
+            }
+            continue;
+          }
+
+          if( (source->curCh == '*') && (source->nextCh == '/') ) {
+            if( level == 0 ) {
+              return false;
+            }
+            level--;
+            if( !(ReadChar(source) && ReadChar(source)) ) {
+              return false;
+            }
+            continue;
+          }
+
+          if( !ReadChar(source) ) {
+            return false;
+          }
+        } while( level );
+
+        loopFlags |= (1 << 2);
+      }
+    } while( loopFlags );
+
+    return true;
+  }
+
+  bool ReadIdent( RetFile* source, rstring** ident ) {
+    rstring* dest = NULL;
+    rstring* tmpDest = NULL;
+
+    if( !(source && ident) ) {
+      return false;
+    }
+
+    dest = (*ident);
+
+    if( !((source->curCh == '_') || isalnum(source->curCh)) ) {
+      return false;
+    }
+
+    while( (source->curCh == '_') || isalnum(source->curCh) ) {
+      tmpDest = rstrappendch(dest, source->curCh);
+      if( tmpDest == NULL ) {
+        (*ident) = dest;
+        return false;
+      }
+      dest = tmpDest;
+
+      if( !ReadChar(source) ) {
+        (*ident) = dest;
+        return false;
+      }
+    }
+
+    (*ident) = dest;
+    return true;
+  }
+
+  bool ReadBinNum( RetFile* source, unsigned* num ) {
+    unsigned result = 0;
+
+    if( !(source && num) ) {
+      return false;
+    }
+
+    if( (source->curCh != '0') && (source->nextCh != 'b') ) {
+      return false;
+    }
+
+    if( !(ReadChar(source) && ReadChar(source)) ) {
+      return false;
+    }
+
+    while( source->curCh ) {
+      if( (source->curCh >= '0') && (source->curCh <= '1') ) {
+        result = (result << 1) + (source->curCh - '0');
+      } else if( source->curCh == '_' ) {
+      } else {
+        break;
+      }
+
+      if( !ReadChar(source) ) {
+        return false;
+      }
+    }
+
+    *num = result;
+    return true;
+  }
+
+  bool ReadOctalNum( RetFile* source, unsigned* num ) {
+    unsigned result = 0;
+
+    if( !(source && num) ) {
+      return false;
+    }
+
+    if( (source->curCh != '0') && (source->nextCh != 'o') ) {
+      return false;
+    }
+
+    if( !(ReadChar(source) && ReadChar(source)) ) {
+      return false;
+    }
+
+    while( source->curCh ) {
+      if( (source->curCh >= '0') && (source->curCh <= '7') ) {
+        result = (result << 3) + (source->curCh - '0');
+      } else if( source->curCh == '_' ) {
+      } else {
+        break;
+      }
+
+      if( !ReadChar(source) ) {
+        return false;
+      }
+    }
+
+    *num = result;
+    return true;
+  }
+
+  bool ReadHexNum( RetFile* source, unsigned* num ) {
+    unsigned result = 0;
+
+    if( !(source && num) ) {
+      return false;
+    }
+
+    if( (source->curCh != '0') && (source->nextCh != 'x') ) {
+      return false;
+    }
+
+    if( !(ReadChar(source) && ReadChar(source)) ) {
+      return false;
+    }
+
+    while( source->curCh ) {
+      if( (source->curCh >= '0') && (source->curCh <= '9') ) {
+        result = (result << 4) + (source->curCh - '0');
+      } else if( (source->curCh >= 'a') && (source->curCh <= 'f') ) {
+        result = (result << 4) + (source->curCh - 'a') + 10;
+      } else if( (source->curCh >= 'A') && (source->curCh <= 'F') ) {
+        result = (result << 4) + (source->curCh - 'A') + 10;
+      } else if( source->curCh == '_' ) {
+      } else {
+        break;
+      }
+
+      if( !ReadChar(source) ) {
+        return false;
+      }
+    }
+
+    *num = result;
+    return true;
+  }
+
+  bool ReadNum( RetFile* source, unsigned* num ) {
+    unsigned result = 0;
+
+    if( !(source && num) ) {
+      return false;
+    }
+
+    // Check for other types of integers
+    if( source->curCh == '0' ) {
+      switch( source->nextCh ) {
+      case 'b':
+        return ReadBinNum(source, num);
+
+      case 'o':
+        return ReadOctalNum(source, num);
+
+      case 'x':
+        return ReadHexNum(source, num);
+      }
+    }
+
+    // Skip leading zero's
+    while( source->curCh == '0' ) {
+      if( !ReadChar(source) ) {
+        return false;
+      }
+    }
+
+    // Tokenize decimal
+    while( (source->curCh == '_') || isdigit(source->curCh) ) {
+      if( source->curCh != '_' ) {
+        result = (result * 10) + ((source->curCh) - '0');
+      }
+      if( !ReadChar(source) ) {
+        return false;
+      }
+    }
+
+    *num = result;
+    return true;
+  }
+
+  bool ReadString( RetFile* source, rstring** string ) {
+    rstring* dest = NULL;
+    rstring* tmpDest = NULL;
+    char quoteCh;
+
+    if( !(source && string) ) {
+      return false;
+    }
+
+    dest = (*string);
+
+    quoteCh = source->curCh;
+    if( !((quoteCh == '\"') || (quoteCh == '\'')) ) {
+      return false;
+    }
+
+    if( !ReadChar(source) ) {
+      return false;
+    }
+
+    while( source->curCh != quoteCh ) {
+      tmpDest = rstrappendch(dest, source->curCh);
+      if( tmpDest == NULL ) {
+        (*string) = dest;
+        return false;
+      }
+      dest = tmpDest;
+
+      if( !ReadChar(source) ) {
+        (*string) = dest;
+        return false;
+      }
+    }
+
+    // Skip closing quote character
+    if( !ReadChar(source) ) {
+      (*string) = dest;
+      return false;
+    }
+
+    (*string) = dest;
+    return true;
   }
 
 /*

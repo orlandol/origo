@@ -36,7 +36,7 @@
       [TYPESPEC IDENT['=' CONSTEXPR][, ...]]
     end
 
-    declare func [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')'
+    funcdecl [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')'
 
     import func [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')'
       from DLLNAMESTR [as ACTUALNAMESTR]
