@@ -617,6 +617,8 @@
 
   bool ReadString( RetFile* source, rstring** string );
 
+  unsigned ReadOperator( RetFile* source );
+
 /*
  *  Code generator declarations
  */
@@ -1529,6 +1531,87 @@ int main( int argc, char* argv[] ) {
 
     (*string) = dest;
     return true;
+  }
+
+  typedef struct Operator {
+    char* operstr;
+    unsigned token;
+  } Operator;
+
+  static const Operator operTable[] = {
+    "++", opPostInc,
+  };
+
+  const size_t numOpers = sizeof(operTable) / sizeof(operTable[0]);
+
+/*
+        opPostDec,
+      operPrec02 = (operSymbol + (2 << 5)),
+        opPreInc,
+        opPreDec,
+        unaryNeg,
+        unaryIsNot,
+        unaryNot,
+      operPrec03 = (operSymbol + (3 << 5)),
+      operPrec04 = (operSymbol + (4 << 5)),
+        opMul,
+        opDiv,
+        opMod,
+      operPrec05 = (operSymbol + (5 << 5)),
+        opAdd,
+        opSub,
+      operPrec06 = (operSymbol + (6 << 5)),
+        opShl,
+        opShr,
+        opSShr,
+        opRol,
+        opSRol,
+        opRor,
+        opSRor,
+      operPrec07 = (operSymbol + (7 << 5)),
+      operPrec08 = (operSymbol + (8 << 5)),
+        opLT,
+        opLTEq,
+        opGT,
+        opGTEq,
+      operPrec09 = (operSymbol + (9 << 5)),
+        opEq,
+        opNotEq,
+      operPrec10 = (operSymbol + (10 << 5)),
+        opAnd,
+      operPrec11 = (operSymbol + (11 << 5)),
+        opXor,
+      operPrec12 = (operSymbol + (12 << 5)),
+        opOr,
+      operPrec13 = (operSymbol + (13 << 5)),
+        opAndIs,
+      operPrec14 = (operSymbol + (14 << 5)),
+        opOrIs,
+      operPrec15 = (operSymbol + (15 << 5)),
+
+    // Assignment operators
+    assignSymbol  = (4 << 9),
+      assignTo,
+      assignNot,
+      assignAdd,
+      assignSub,
+      assignMul,
+      assignDiv,
+      assignMod,
+      assignShl,
+      assignShr,
+      assignSShr,
+      assignRol,
+      assignSRol,
+      assignRor,
+      assignSRor,
+      assignAnd,
+      assignXor,
+      assignOr,
+*/
+
+  unsigned ReadOperator( RetFile* source ) {
+    return 0;
   }
 
 /*
