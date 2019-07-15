@@ -1,4 +1,12 @@
 
+  // Single-line comments
+
+  /*
+      Multi-line
+      /* Nested */
+      Comments
+  */
+
 program Retineo
 
 /*
@@ -34,7 +42,10 @@ program Retineo
   type uint32 usize = 0
   type uint64 ufsize = 0
 
-  type uint:1 bool = 0
+  enum uint:1 bool
+    false
+    true
+  end
 
 /*
  *  Constants
@@ -42,9 +53,6 @@ program Retineo
 
   const
     @null = @0
-
-    bool false = 0
-    bool true = 1
   end
 
 /*
@@ -114,27 +122,28 @@ program Retineo
 /*
  *  Base file object
  */
-  object file
+  object File
   end
 
-  interface fileRead implements file
+  abstract File
     method ufsize read( @dest, ufsize size )
-    method ufsize write( @source, ufsize soze )
+    method ufsize write( @source, ufsize size )
   end
 
-  interface fileRead implements file
+/*
+ *  Disk file object
+ */
+  object DiskFile inherits File
+    HANDLE handle
   end
 
-  interface fileNoRead implements file
+  interface DiskFile
   end
 
-  interface fileWrite implements file
+  interface DiskFileRead implements DiskFile
   end
 
-  interface fileNoWrite implements file
-  end
-
-  abstract file inherits fileRead, fileNoWrite
+  interface DiskFileWrite implements DiskFile
   end
 
 run
