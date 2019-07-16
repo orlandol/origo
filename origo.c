@@ -34,8 +34,8 @@
       tkRDoubleBrace,
       tkComma,
       tkColon,
-      tkSemicolon,
       tkAt,
+      tkHash,
 
     // Reserved high level keyword tokens
     rsvdIdent = (1 << 9),
@@ -691,21 +691,19 @@ int main( int argc, char* argv[] ) {
 
   RetFile* retSource = OpenRet(argv[1], 0);
 
+  SkipComments( retSource );
+
   printf( "curCh: %c (%u); line: %u; col: %u; nextCh: %c (%u)\n",
       retSource->curCh, retSource->curCh,
       retSource->line, retSource->col,
       retSource->nextCh, retSource->nextCh );
 
-  SkipComments( retSource );
+  printf( "\n" );
+  unsigned operToken = ReadOperator(retSource);
+  #define boolstr(boolval) (boolval ? "true" : "false")
+  printf( "ReadOperator: token = %u; %s\n", operToken, boolstr(operToken == assignNot) );
 
-  rstring* strval = rstrzalloc(0);
-  ReadString( retSource, &strval );
-  printf( "ReadString: strval = '%s'; length = %u\n", rstrtext(strval), rstrlen(strval) );
-  if( strval ) {
-    free( strval );
-    strval = NULL;
-  }
-
+  printf( "\n" );
   printf( "curCh: %c (%u); line: %u; col: %u; nextCh: %c (%u)\n",
       retSource->curCh, retSource->curCh,
       retSource->line, retSource->col,
@@ -1534,84 +1532,121 @@ int main( int argc, char* argv[] ) {
   }
 
   typedef struct Operator {
-    char* operstr;
+    char* text;
     unsigned token;
   } Operator;
 
   static const Operator operTable[] = {
-    "++", opPostInc,
+    "!",    unaryIsNot,
+    "!=",   opNotEq,
+    "#",    tkHash,
+    "%",    opMod,
+    "%=",   assignMod,
+    "&",    opAnd,
+    "&&",   opAndIs,
+    "&=",   assignAnd,
+    "(",    tkLParen,
+    ")",    tkRParen,
+    "*",    opMul,
+    "*=",   assignMul,
+    "+",    opAdd,
+    "++",   opPostInc,
+    "+=",   assignAdd,
+    ",",    tkComma,
+    "-",    opSub,
+    "--",   opPostDec,
+    "-=",   assignSub,
+    ".",    tkDot,
+    "..",   tkDotDot,
+    "/",    opDiv,
+    "/=",   assignDiv,
+    ":",    tkColon,
+    "<",    opLT,
+    "<-<",  opSRol,
+    "<-<=", assignSRol,
+    "<<",   opShl,
+    "<<<",  opRol,
+    "<<<=", assignRol,
+    "<<=",  assignShl,
+    "<=",   opLTEq,
+    "=",    assignTo,
+    "==",   opEq,
+    ">",    opGT,
+    ">->",  opSRor,
+    ">->=", assignSRor,
+    ">=",   opGTEq,
+    ">>",   opShr,
+    ">>=",  assignShr,
+    ">>>",  opRor,
+    ">>>=", assignRor,
+    "@",    tkAt,
+    "[",    tkLBrace,
+    "[[",   tkLDoubleBrace,
+    "]",    tkRBrace,
+    "]]",   tkRDoubleBrace,
+    "^",    opXor,
+    "^=",   assignXor,
+    "|",    opOr,
+    "|=",   assignOr,
+    "|>>",  opSShr,
+    "|>>=", assignSShr,
+    "||",   opOrIs,
+    "~",    unaryNot,
+    "~=",   assignNot
   };
 
   const size_t numOpers = sizeof(operTable) / sizeof(operTable[0]);
 
-/*
-        opPostDec,
-      operPrec02 = (operSymbol + (2 << 5)),
-        opPreInc,
-        opPreDec,
-        unaryNeg,
-        unaryIsNot,
-        unaryNot,
-      operPrec03 = (operSymbol + (3 << 5)),
-      operPrec04 = (operSymbol + (4 << 5)),
-        opMul,
-        opDiv,
-        opMod,
-      operPrec05 = (operSymbol + (5 << 5)),
-        opAdd,
-        opSub,
-      operPrec06 = (operSymbol + (6 << 5)),
-        opShl,
-        opShr,
-        opSShr,
-        opRol,
-        opSRol,
-        opRor,
-        opSRor,
-      operPrec07 = (operSymbol + (7 << 5)),
-      operPrec08 = (operSymbol + (8 << 5)),
-        opLT,
-        opLTEq,
-        opGT,
-        opGTEq,
-      operPrec09 = (operSymbol + (9 << 5)),
-        opEq,
-        opNotEq,
-      operPrec10 = (operSymbol + (10 << 5)),
-        opAnd,
-      operPrec11 = (operSymbol + (11 << 5)),
-        opXor,
-      operPrec12 = (operSymbol + (12 << 5)),
-        opOr,
-      operPrec13 = (operSymbol + (13 << 5)),
-        opAndIs,
-      operPrec14 = (operSymbol + (14 << 5)),
-        opOrIs,
-      operPrec15 = (operSymbol + (15 << 5)),
-
-    // Assignment operators
-    assignSymbol  = (4 << 9),
-      assignTo,
-      assignNot,
-      assignAdd,
-      assignSub,
-      assignMul,
-      assignDiv,
-      assignMod,
-      assignShl,
-      assignShr,
-      assignSShr,
-      assignRol,
-      assignSRol,
-      assignRor,
-      assignSRor,
-      assignAnd,
-      assignXor,
-      assignOr,
-*/
-
   unsigned ReadOperator( RetFile* source ) {
-    return 0;
+    char operator[8] = {};
+    size_t leftIndex;
+    size_t operIndex;
+    size_t rightIndex;
+    size_t operLength = 0;
+    int result;
+    unsigned token = 0;
+
+    if( !(source && ispunct(source->curCh)) ) {
+      return 0;
+    }
+
+    while( ispunct(source->curCh) ) {
+      if( operLength > 7 ) {
+        break;
+      }
+
+      operator[operLength++] = source->curCh;
+
+      leftIndex = 0;
+      rightIndex = numOpers;
+      operIndex = numOpers / 2;
+
+      while( leftIndex < rightIndex ) {
+        result = strcmp(operTable[operIndex].text, operator);
+        if( result == 0 ) {
+          token = operTable[operIndex].token;
+          break;
+        }
+
+        if( result > 0 ) {
+          rightIndex = operIndex;
+        } else {
+          leftIndex = operIndex + 1;
+        }
+
+        operIndex = (leftIndex + rightIndex) / 2;
+      }
+
+      if( leftIndex > rightIndex ) {
+        return token;
+      }
+
+      if( !ReadChar(source) ) {
+        return token;
+      }
+    }
+
+    return token;
   }
 
 /*
