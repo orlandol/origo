@@ -234,7 +234,7 @@
     itemCount = keyList->itemCount;\
     item = keyList->item;\
     \
-    /* Search for insert position */\
+    /* Search for item */\
     leftIndex = 0;\
     rightIndex = itemCount;\
     retrieveIndex = itemCount / 2;\
