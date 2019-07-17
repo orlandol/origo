@@ -115,8 +115,17 @@ program Retineo
  *  Memory management
  */
 
-  func @ alloc( usize size )
+  func @alloc( usize size )
     return LocalAlloc(LPTR, size)
+  end
+
+  func free( #ptrvar )
+    if #ptrvar
+      if @ptrvar
+        LocalFree( @ptrvar )
+        @ptrvar = null
+      endif
+    endif
   end
 
 /*

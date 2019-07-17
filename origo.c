@@ -620,18 +620,61 @@
   unsigned ReadOperator( RetFile* source );
 
 /*
+ *  Windows PE declarations
+ */
+
+  typedef struct WinPE {
+    FILE* handle;
+    size_t entryPoint;
+  } WinPE;
+
+  typedef struct WinPEHeader {
+    ///TODO: Define barebones PE header
+  } WinPEHeader;
+
+  WinPE* CreatePE( char* fileName );
+  void ClosePE( WinPE** winpe );
+
+/*
  *  Code generator declarations
  */
 
-  typedef struct x86InstructionBuffer {
-    uint8_t fields;
+  typedef enum x86Field {
+    hasPrefix0 = 1 << 16,
+    firstX86Field = hasPrefix0,
+    hasPrefix1 = 1 << 15,
+    hasPrefix2 = 1 << 14,
+    hasPrefix3 = 1 << 13,
+    hasOpcode0 = 1 << 12,
+    hasOpcode1 = 1 << 11,
+    hasOpcode2 = 1 << 10,
+    hasModRM = 1 << 9,
+    hasSIB = 1 << 8,
+    hasDisp0 = 1 << 7,
+    hasDisp1 = 1 << 6,
+    hasDisp2 = 1 << 5,
+    hasDisp3 = 1 << 4,
+    hasDisp8 = hasDisp0,
+    hasDisp16 = hasDisp0 | hasDisp1,
+    hasDisp32 = hasDisp0 | hasDisp1 | hasDisp2 | hasDisp3,
+    hasImm0 = 1 << 3,
+    hasImm1 = 1 << 2,
+    hasImm2 = 1 << 1,
+    hasImm3 = 1 << 0,
+    hasImm8 = hasImm3,
+    hasImm16 = hasImm3 | hasImm2,
+    hasImm32 = hasImm3 | hasImm2 | hasImm1 | hasImm0,
+  } x86Field;
+
+  typedef struct x86Instruction {
+    unsigned fields;
     uint8_t prefix[4];
     uint8_t opcode[3];
     uint8_t modRM;
     uint8_t sib;
     uint32_t displacement;
     uint32_t immediate;
-  } x86InstructionBuffer;
+  } x86Instruction;
 
   typedef struct x86Addr {
     unsigned fields;
@@ -641,17 +684,14 @@
     int32_t  displacement;
   } x86Addr;
 
-  bool x86Emit( FILE* binFile, x86InstructionBuffer* instruction );
+  bool x86Emit( FILE* binFile, x86Instruction* instruction );
 
-  bool x86EncodeAddr16( x86InstructionBuffer* destInstructionk, x86Addr* addr16 );
-  bool x86EncodeAddr32( x86InstructionBuffer* destInstructionk, x86Addr* addr32 );
+  bool x86EncodeAddr16( x86Instruction* destInstructionk, x86Addr* addr16 );
+  bool x86EncodeAddr32( x86Instruction* destInstructionk, x86Addr* addr32 );
 
-  bool x86GenOpMem( x86InstructionBuffer* destInstruction,
-    unsigned mnemonic, x86Addr* addr );
+  bool x86GenOpMem( x86Instruction* dest, unsigned mnemonic, x86Addr* addr );
 
-/*
- *  Windows PE declarations
- */
+  bool x86GenOpRegImm( x86Instruction* dest, unsigned mnemonic, unsigned imm );
 
 /*
  *  Backpatch declarations
@@ -689,27 +729,18 @@ int main( int argc, char* argv[] ) {
     return 1;
   }
 
-  RetFile* retSource = OpenRet(argv[1], 0);
+  FILE* bin = fopen("out", "wb");
+  x86Instruction instruction = {};
+  if( bin ) {
+    instruction.fields |= (hasOpcode0 | hasImm8);
+    instruction.opcode[0] = 0xCD;
+    instruction.immediate = 0x20;
 
-  SkipComments( retSource );
+    x86Emit( bin, &instruction );
 
-  printf( "curCh: %c (%u); line: %u; col: %u; nextCh: %c (%u)\n",
-      retSource->curCh, retSource->curCh,
-      retSource->line, retSource->col,
-      retSource->nextCh, retSource->nextCh );
-
-  printf( "\n" );
-  unsigned operToken = ReadOperator(retSource);
-  #define boolstr(boolval) (boolval ? "true" : "false")
-  printf( "ReadOperator: token = %u; %s\n", operToken, boolstr(operToken == assignNot) );
-
-  printf( "\n" );
-  printf( "curCh: %c (%u); line: %u; col: %u; nextCh: %c (%u)\n",
-      retSource->curCh, retSource->curCh,
-      retSource->line, retSource->col,
-      retSource->nextCh, retSource->nextCh );
-
-  CloseRet( &retSource );
+    fclose( bin );
+    bin = NULL;
+  }
 
   return 0;
 }
@@ -1536,7 +1567,7 @@ int main( int argc, char* argv[] ) {
     unsigned token;
   } Operator;
 
-  static const Operator operTable[] = {
+  const Operator operTable[] = {
     "!",    unaryIsNot,
     "!=",   opNotEq,
     "#",    tkHash,
@@ -1650,12 +1681,103 @@ int main( int argc, char* argv[] ) {
   }
 
 /*
+ *  Windows PE implementation
+ */
+
+  WinPE* CreatePE( char* fileName ) {
+    WinPE* newPE = NULL;
+    FILE* dosStub = NULL;
+
+    if( !(fileName && (*fileName)) ) {
+      return NULL;
+    }
+
+    newPE = calloc(1, sizeof(WinPE));
+    if( newPE == NULL ) {
+      goto ReturnError;
+    }
+
+    newPE->handle = fopen(fileName, "wb");
+    if( newPE->handle == NULL ) {
+      goto ReturnError;
+    }
+
+    ///TODO: Write default header
+
+    ///TODO: Write MS-DOS stub
+
+    return newPE;
+
+  ReturnError:
+    if( dosStub ) {
+      fclose( dosStub );
+      dosStub = NULL;
+    }
+    ClosePE( &newPE );
+    return NULL;
+  }
+
+  void ClosePE( WinPE** winpe ) {
+    if( winpe ) {
+      if( (*winpe) ) {
+        if( (*winpe)->handle ) {
+          ///TODO: Finalize header/etc.
+
+          fclose( (*winpe)->handle );
+          (*winpe)->handle = NULL;
+        }
+
+        free( (*winpe) );
+        (*winpe) = NULL;
+      }
+    }
+  }
+
+/*
  *  Code generator implementation
  */
 
-/*
- *  Windows PE implementation
- */
+  bool x86Emit( FILE* binFile, x86Instruction* instruction ) {
+    uint8_t machineCode[sizeof(x86Instruction)];
+    uint8_t* instBuffer = ((uint8_t*)instruction) + sizeof(unsigned);
+    unsigned mcIndex = 0;
+    unsigned mcLength = 0;
+    unsigned fields;
+    unsigned fieldBit = firstX86Field;
+
+    if( !(binFile && instruction) ) {
+      return false;
+    }
+
+    fields = instruction->fields;
+
+    for( fieldBit = firstX86Field; fieldBit > 0; fieldBit >>= 1 ) {
+      if( fields & fieldBit ) {
+        machineCode[mcIndex++] = *instBuffer;
+        mcLength++;
+      }
+      instBuffer++;
+    }
+
+    return (mcLength &&
+        (fwrite(machineCode, 1, mcLength, binFile) == mcLength));
+  }
+
+  bool x86EncodeAddr16( x86Instruction* dest, x86Addr* addr16 ) {
+    return false;
+  }
+
+  bool x86EncodeAddr32( x86Instruction* dest, x86Addr* addr32 ) {
+    return false;
+  }
+
+  bool x86GenOpMem( x86Instruction* dest, unsigned mnemonic, x86Addr* addr ) {
+    return false;
+  }
+
+  bool x86GenOpRegImm( x86Instruction* dest, unsigned mnemonic, unsigned imm ) {
+    return false;
+  }
 
 /*
  *  Backpatch implementation
