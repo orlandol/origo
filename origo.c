@@ -641,29 +641,35 @@
 
   typedef enum x86Field {
     hasPrefix0 = 1 << 16,
-    firstX86Field = hasPrefix0,
     hasPrefix1 = 1 << 15,
     hasPrefix2 = 1 << 14,
     hasPrefix3 = 1 << 13,
+
     hasOpcode0 = 1 << 12,
     hasOpcode1 = 1 << 11,
     hasOpcode2 = 1 << 10,
-    hasModRM = 1 << 9,
-    hasSIB = 1 << 8,
-    hasDisp0 = 1 << 7,
-    hasDisp1 = 1 << 6,
-    hasDisp2 = 1 << 5,
-    hasDisp3 = 1 << 4,
+
+    hasModRM   = 1 << 9,
+
+    hasSIB     = 1 << 8,
+
+    hasDisp0   = 1 << 7,
+    hasDisp1   = 1 << 6,
+    hasDisp2   = 1 << 5,
+    hasDisp3   = 1 << 4,
+
+    hasImm0    = 1 << 3,
+    hasImm1    = 1 << 2,
+    hasImm2    = 1 << 1,
+    hasImm3    = 1 << 0,
+
     hasDisp8 = hasDisp0,
     hasDisp16 = hasDisp0 | hasDisp1,
     hasDisp32 = hasDisp0 | hasDisp1 | hasDisp2 | hasDisp3,
-    hasImm0 = 1 << 3,
-    hasImm1 = 1 << 2,
-    hasImm2 = 1 << 1,
-    hasImm3 = 1 << 0,
-    hasImm8 = hasImm3,
-    hasImm16 = hasImm3 | hasImm2,
-    hasImm32 = hasImm3 | hasImm2 | hasImm1 | hasImm0,
+
+    hasImm8 = hasImm0,
+    hasImm16 = hasImm0 | hasImm1,
+    hasImm32 = hasImm0 | hasImm1 | hasImm2 | hasImm3,
   } x86Field;
 
   typedef struct x86Instruction {
@@ -730,12 +736,11 @@ int main( int argc, char* argv[] ) {
   }
 
   FILE* bin = fopen("out", "wb");
-  x86Instruction instruction = {};
   if( bin ) {
-    instruction.fields |= (hasOpcode0 | hasImm8);
-    instruction.opcode[0] = 0xCD;
-    instruction.immediate = 0x20;
-
+    x86Instruction instruction = {};
+    instruction.fields = (hasOpcode0 | hasImm8);
+    instruction.opcode[0] = 0x14;
+    instruction.immediate = 0x11;
     x86Emit( bin, &instruction );
 
     fclose( bin );
@@ -1739,11 +1744,10 @@ int main( int argc, char* argv[] ) {
 
   bool x86Emit( FILE* binFile, x86Instruction* instruction ) {
     uint8_t machineCode[sizeof(x86Instruction)];
-    uint8_t* instBuffer = ((uint8_t*)instruction) + sizeof(unsigned);
-    unsigned mcIndex = 0;
-    unsigned mcLength = 0;
+    unsigned codeLength = 0;
     unsigned fields;
-    unsigned fieldBit = firstX86Field;
+    unsigned fieldBit;
+    unsigned index;
 
     if( !(binFile && instruction) ) {
       return false;
@@ -1751,16 +1755,64 @@ int main( int argc, char* argv[] ) {
 
     fields = instruction->fields;
 
-    for( fieldBit = firstX86Field; fieldBit > 0; fieldBit >>= 1 ) {
+    for( index = 0, fieldBit = hasPrefix0; index < 4; index++, fieldBit <<= 1 ) {
       if( fields & fieldBit ) {
-        machineCode[mcIndex++] = *instBuffer;
-        mcLength++;
+        machineCode[codeLength++] = instruction->prefix[index];
       }
-      instBuffer++;
     }
 
-    return (mcLength &&
-        (fwrite(machineCode, 1, mcLength, binFile) == mcLength));
+    for( index = 0, fieldBit = hasOpcode0; index < 3; index++, fieldBit <<= 1 ) {
+      if( fields & fieldBit ) {
+        machineCode[codeLength++] = instruction->opcode[index];
+      }
+    }
+
+    if( fields & hasModRM ) {
+      machineCode[codeLength++] = instruction->modRM;
+    }
+
+    if( fields & hasSIB ) {
+      machineCode[codeLength++] = instruction->sib;
+    }
+
+    switch( fields & hasDisp32 ) {
+    case hasDisp8:
+      machineCode[codeLength++] = instruction->displacement;
+      break;
+
+    case hasDisp16:
+      machineCode[codeLength++] = instruction->displacement;
+      machineCode[codeLength++] = instruction->displacement >> 8;
+      break;
+
+    case hasDisp32:
+      machineCode[codeLength++] = instruction->displacement;
+      machineCode[codeLength++] = instruction->displacement >> 8;
+      machineCode[codeLength++] = instruction->displacement >> 16;
+      machineCode[codeLength++] = instruction->displacement >> 24;
+      break;
+    }
+
+    switch( fields & hasImm32 ) {
+    case hasImm8:
+      machineCode[codeLength++] = instruction->immediate;
+      break;
+
+    case hasImm16:
+      machineCode[codeLength++] = instruction->immediate;
+      machineCode[codeLength++] = instruction->immediate >> 8;
+      break;
+
+    case hasImm32:
+      machineCode[codeLength++] = instruction->immediate;
+      machineCode[codeLength++] = instruction->immediate >> 8;
+      machineCode[codeLength++] = instruction->immediate >> 16;
+      machineCode[codeLength++] = instruction->immediate >> 24;
+      break;
+    }
+
+    return (codeLength &&
+        (fwrite(machineCode, 1, codeLength, binFile) == codeLength));
   }
 
   bool x86EncodeAddr16( x86Instruction* dest, x86Addr* addr16 ) {
