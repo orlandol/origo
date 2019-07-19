@@ -203,6 +203,116 @@
 
       // x86 mnemonic tokens
       x86Ident = (6 << 9),
+        x86Call,
+        x86Push,
+          lastX86Op = x86Push,
+        x86Cbw,
+        x86Cwd,
+        x86Clc,
+        x86Cld,
+        x86Cli,
+        x86Cmc,
+        x86Int3,
+        x86Iret,
+        x86Lahf,
+        x86Nop,
+        x86Popf,
+        x86Pushf,
+        x86Ret,
+        x86Retf,
+        x86Sahf,
+        x86Stc,
+        x86Std,
+        x86Sti,
+        x86Xlat,
+        x86Xlatb,
+        x86Adc,
+        x86Add,
+        x86And,
+        x86Cmp,
+        x86Dec,
+        x86Div,
+        x86IDiv,
+        x86IMul,
+        x86In,
+        x86Inc,
+        x86Int,
+        x86Jo,
+          x86JCC = x86Jo,
+        x86Jno,
+        x86Jb,
+          x86Jc = x86Jb,
+          x86Jnae = x86Jb,
+        x86Jnb,
+          x86Jnc = x86Jnb,
+          x86Jae = x86Jnb,
+        x86Je,
+          x86Jz = x86Je,
+        x86Jne,
+          x86Jnz = x86Jne,
+        x86Jbe,
+          x86Jna = x86Jbe,
+        x86Jnbe,
+          x86Ja = x86Jnbe,
+        x86Js,
+        x86Jns,
+        x86Jp,
+          x86Jpe = x86Jp,
+        x86Jnp,
+          x86Jpo = x86Jnp,
+        x86Jl,
+          x86Jnge = x86Jl,
+        x86Jnl,
+          x86Jge = x86Jnl,
+        x86Jle,
+          x86Jng = x86Jle,
+        x86Jnle,
+          x86Jg = x86Jnle,
+        x86Rep,
+        x86Repe,
+        x86Repne,
+        x86Repz,
+        x86Repnz,
+        x86Lodsb,
+        x86Lodsw,
+        x86Movsb,
+        x86Movsw,
+        x86Stosb,
+        x86Stosw,
+        x86Cmpsb,
+        x86Cmpsw,
+        x86Scasb,
+        x86Scasw,
+        x86Jcxz,
+        x86Jmp,
+        x86Lds,
+        x86Les,
+        x86Lea,
+        x86Loop,
+        x86Loope,
+        x86Loopne,
+        x86Loopz,
+        x86Loopnz,
+        x86Mov,
+        x86Mul,
+        x86Neg,
+        x86Not,
+        x86Or,
+        x86Out,
+        x86Pop,
+        x86Rcl,
+        x86Rcr,
+        x86Rol,
+        x86Ror,
+        x86Sal,
+        x86Sar,
+        x86Shl,
+        x86Shr,
+        x86Sbb,
+        x86Sub,
+        x86Test,
+        x86Xchg,
+        x86Xor
   } Token;
 
 /*
@@ -232,7 +342,7 @@
   } rstring;
 
   size_t rstrlen( rstring* source );
-  size_t rstrrsvd( rstring* source );
+  size_t rstrrsvdlen( rstring* source );
   char* rstrtext( rstring* source );
 
   rstring* rstralloc( size_t reserveLength );
@@ -690,6 +800,20 @@
     int32_t  displacement;
   } x86Addr;
 
+  typedef struct x86Format {
+    unsigned mnemonic;
+    unsigned param[3];
+    unsigned index;
+  } x86Format;
+
+  typedef struct x86Encoding {
+    unsigned fields;
+    uint8_t prefixes[4];
+    uint8_t opcodes[3];
+    uint8_t modRM;
+    uint8_t sib;
+  } x86Encoding;
+
   bool x86Emit( FILE* binFile, x86Instruction* instruction );
 
   bool x86EncodeAddr16( x86Instruction* destInstructionk, x86Addr* addr16 );
@@ -762,7 +886,7 @@ int main( int argc, char* argv[] ) {
     return (source ? source->length : 0);
   }
 
-  inline size_t rstrrsvd( rstring* source ) {
+  inline size_t rstrrsvdlen( rstring* source ) {
     return (source ? source->rsvdLength : 0);
   }
 
@@ -882,7 +1006,7 @@ int main( int argc, char* argv[] ) {
     size_t destSize;
 
     destLength = rstrlen(dest);
-    destRsvd = rstrrsvd(dest);
+    destRsvd = rstrrsvdlen(dest);
 
     if( (destRsvd - destLength) < 2 ) {
       destSize = (destRsvd + 8) & (~7);
@@ -920,7 +1044,7 @@ int main( int argc, char* argv[] ) {
     }
 
     destLength = rstrlen(dest);
-    destRsvd = rstrrsvd(dest);
+    destRsvd = rstrrsvdlen(dest);
 
     sourceLength = rstrlen(source);
 
@@ -959,7 +1083,7 @@ int main( int argc, char* argv[] ) {
     }
 
     destLength = rstrlen(dest);
-    destRsvd = rstrrsvd(dest);
+    destRsvd = rstrrsvdlen(dest);
 
     if( source == NULL ) {
       source = "";
@@ -1741,6 +1865,25 @@ int main( int argc, char* argv[] ) {
 /*
  *  Code generator implementation
  */
+
+  // mnemonic,
+  // param0, param1, param2,
+  // index
+  const x86Format formatTable[] = {
+    x86Adc, 0,
+  };
+
+  const formatSize = sizeof(formatTable) / sizeof(formatTable[0]);
+
+  // fields,
+  // prefix0, prefix1, prefix2, prefix3,
+  // opcode0, opcode1, opcode2, modRM,
+  // sib, xform0, xform1, xform2
+  const x86Encoding encodeTable[] = {
+    hasOpcode0, 0, 0, 0, 0, 
+  };
+
+  const encodeSize = sizeof(encodeTable) / sizeof(encodeTable[0]);
 
   bool x86Emit( FILE* binFile, x86Instruction* instruction ) {
     uint8_t machineCode[sizeof(x86Instruction)];
