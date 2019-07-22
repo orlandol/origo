@@ -74,15 +74,18 @@
       rsvdExit,
 
     // Literal value tokens
-    valLiteral = (2 << 9),
-      valFalse,
-      valTrue,
-      valInt,
-      valInt8,
-      valUint,
-      valUint8,
-      valString,
-      valChar,
+    valImmediate = (2 << 9),
+      valInt = (valImmediate + (0 << 5)),
+        valInt8,
+        valInt16,
+        valInt32,
+
+      valUint = (valImmediate + (1 << 5)),
+        valUint8,
+        valUint16,
+        valUint32,
+
+      valChar = (valImmediate + (2 << 5)),
 
     // Operator tokens
     operSymbol = (3 << 9),
@@ -153,13 +156,15 @@
       assignXor,
       assignOr,
 
-    // x86 general tokens
-    x86General = (5 << 9),
+    // x86 operand tokens
+    x86Operand = (5 << 9),
+        x86OperandMask = (x86Operand | (15 << 4)),
+
       // x86 memory address
-      x86Mem  = (x86General + (0 << 4) + 0),
+      x86Mem  = (x86Operand + (0 << 4) + 0),
 
       // x86 segment/selector register tokens
-      x86SReg = (x86General + (1 << 4) + 0),
+      x86SReg = (x86Operand + (1 << 4) + 0),
         x86SRegES,
         x86SRegCS,
         x86SRegSS,
@@ -169,7 +174,7 @@
         lastX86SReg = x86SRegGS,
 
       // x86 8-bit register tokens
-      x86Reg8 = (x86General + (2 << 4) + 0),
+      x86Reg8 = (x86Operand + (2 << 4) + 0),
         x86RegAL,
         x86RegCL,
         x86RegDL,
@@ -180,7 +185,7 @@
         x86RegBH,
 
       // x86 16-bit register tokens
-      x86Reg16 =(x86General + (3 << 4) + 0),
+      x86Reg16 =(x86Operand + (3 << 4) + 0),
         x86RegAX,
         x86RegCX,
         x86RegDX,
@@ -191,7 +196,7 @@
         x86RegDI,
 
       // x86 32-bit register tokens
-      x86Reg32 = (x86General + (4 << 4) + 0),
+      x86Reg32 = (x86Operand + (4 << 4) + 0),
         x86RegEAX,
         x86RegECX,
         x86RegEDX,
@@ -202,117 +207,118 @@
         x86RegEDI,
 
       // x86 mnemonic tokens
-      x86Ident = (6 << 9),
-        x86Call,
-        x86Push,
-          lastX86Op = x86Push,
-        x86Cbw,
-        x86Cwd,
-        x86Clc,
-        x86Cld,
-        x86Cli,
-        x86Cmc,
-        x86Int3,
-        x86Iret,
-        x86Lahf,
-        x86Nop,
-        x86Popf,
-        x86Pushf,
-        x86Ret,
-        x86Retf,
-        x86Sahf,
-        x86Stc,
-        x86Std,
-        x86Sti,
-        x86Xlat,
-        x86Xlatb,
-        x86Adc,
-        x86Add,
-        x86And,
-        x86Cmp,
-        x86Dec,
-        x86Div,
-        x86IDiv,
-        x86IMul,
-        x86In,
-        x86Inc,
-        x86Int,
-        x86Jo,
-          x86JCC = x86Jo,
-        x86Jno,
-        x86Jb,
-          x86Jc = x86Jb,
-          x86Jnae = x86Jb,
-        x86Jnb,
-          x86Jnc = x86Jnb,
-          x86Jae = x86Jnb,
-        x86Je,
-          x86Jz = x86Je,
-        x86Jne,
-          x86Jnz = x86Jne,
-        x86Jbe,
-          x86Jna = x86Jbe,
-        x86Jnbe,
-          x86Ja = x86Jnbe,
-        x86Js,
-        x86Jns,
-        x86Jp,
-          x86Jpe = x86Jp,
-        x86Jnp,
-          x86Jpo = x86Jnp,
-        x86Jl,
-          x86Jnge = x86Jl,
-        x86Jnl,
-          x86Jge = x86Jnl,
-        x86Jle,
-          x86Jng = x86Jle,
-        x86Jnle,
-          x86Jg = x86Jnle,
-        x86Rep,
-        x86Repe,
-        x86Repne,
-        x86Repz,
-        x86Repnz,
-        x86Lodsb,
-        x86Lodsw,
-        x86Movsb,
-        x86Movsw,
-        x86Stosb,
-        x86Stosw,
-        x86Cmpsb,
-        x86Cmpsw,
-        x86Scasb,
-        x86Scasw,
-        x86Jcxz,
-        x86Jmp,
-        x86Lds,
-        x86Les,
-        x86Lea,
-        x86Loop,
-        x86Loope,
-        x86Loopne,
-        x86Loopz,
-        x86Loopnz,
-        x86Mov,
-        x86Mul,
-        x86Neg,
-        x86Not,
-        x86Or,
-        x86Out,
-        x86Pop,
-        x86Rcl,
-        x86Rcr,
-        x86Rol,
-        x86Ror,
-        x86Sal,
-        x86Sar,
-        x86Shl,
-        x86Shr,
-        x86Sbb,
-        x86Sub,
-        x86Test,
-        x86Xchg,
-        x86Xor
+    x86Ident = (6 << 9),
+      x86Call,
+        firstX86Ident = x86Call,
+      x86Push,
+      x86Cbw,
+      x86Cwd,
+      x86Clc,
+      x86Cld,
+      x86Cli,
+      x86Cmc,
+      x86Int3,
+      x86Iret,
+      x86Lahf,
+      x86Nop,
+      x86Popf,
+      x86Pushf,
+      x86Ret,
+      x86Retf,
+      x86Sahf,
+      x86Stc,
+      x86Std,
+      x86Sti,
+      x86Xlat,
+      x86Xlatb,
+      x86Adc,
+      x86Add,
+      x86And,
+      x86Cmp,
+      x86Dec,
+      x86Div,
+      x86IDiv,
+      x86IMul,
+      x86In,
+      x86Inc,
+      x86Int,
+      x86Jo,
+        x86JCC = x86Jo,
+      x86Jno,
+      x86Jb,
+        x86Jc = x86Jb,
+        x86Jnae = x86Jb,
+      x86Jnb,
+        x86Jnc = x86Jnb,
+        x86Jae = x86Jnb,
+      x86Je,
+        x86Jz = x86Je,
+      x86Jne,
+        x86Jnz = x86Jne,
+      x86Jbe,
+        x86Jna = x86Jbe,
+      x86Jnbe,
+        x86Ja = x86Jnbe,
+      x86Js,
+      x86Jns,
+      x86Jp,
+        x86Jpe = x86Jp,
+      x86Jnp,
+        x86Jpo = x86Jnp,
+      x86Jl,
+        x86Jnge = x86Jl,
+      x86Jnl,
+        x86Jge = x86Jnl,
+      x86Jle,
+        x86Jng = x86Jle,
+      x86Jnle,
+        x86Jg = x86Jnle,
+      x86Rep,
+      x86Repe,
+      x86Repne,
+      x86Repz,
+      x86Repnz,
+      x86Lodsb,
+      x86Lodsw,
+      x86Movsb,
+      x86Movsw,
+      x86Stosb,
+      x86Stosw,
+      x86Cmpsb,
+      x86Cmpsw,
+      x86Scasb,
+      x86Scasw,
+      x86Jcxz,
+      x86Jmp,
+      x86Lds,
+      x86Les,
+      x86Lea,
+      x86Loop,
+      x86Loope,
+      x86Loopne,
+      x86Loopz,
+      x86Loopnz,
+      x86Mov,
+      x86Mul,
+      x86Neg,
+      x86Not,
+      x86Or,
+      x86Out,
+      x86Pop,
+      x86Rcl,
+      x86Rcr,
+      x86Rol,
+      x86Ror,
+      x86Sal,
+      x86Sar,
+      x86Shl,
+      x86Shr,
+      x86Sbb,
+      x86Sub,
+      x86Test,
+      x86Xchg,
+      x86Xor,
+        lastX86Ident = x86Xor
   } Token;
 
 /*
@@ -736,6 +742,8 @@
   typedef struct WinPE {
     FILE* handle;
     size_t entryPoint;
+    unsigned sizeFlag;
+    uint8_t sizePrefix;
   } WinPE;
 
   typedef struct WinPEHeader {
@@ -750,36 +758,36 @@
  */
 
   typedef enum x86Field {
-    hasPrefix0 = 1 << 16,
-    hasPrefix1 = 1 << 15,
-    hasPrefix2 = 1 << 14,
-    hasPrefix3 = 1 << 13,
+    hasPrefix1 = 1 << 16,
+    hasPrefix2 = 1 << 15,
+    hasPrefix3 = 1 << 14,
+    hasPrefix4 = 1 << 13,
 
-    hasOpcode0 = 1 << 12,
-    hasOpcode1 = 1 << 11,
-    hasOpcode2 = 1 << 10,
+    hasOpcode1 = 1 << 12,
+    hasOpcode2 = 1 << 11,
+    hasOpcode3 = 1 << 10,
 
     hasModRM   = 1 << 9,
 
     hasSIB     = 1 << 8,
 
-    hasDisp0   = 1 << 7,
-    hasDisp1   = 1 << 6,
-    hasDisp2   = 1 << 5,
-    hasDisp3   = 1 << 4,
+    hasDisp1   = 1 << 7,
+    hasDisp2   = 1 << 6,
+    hasDisp3   = 1 << 5,
+    hasDisp4   = 1 << 4,
 
-    hasImm0    = 1 << 3,
-    hasImm1    = 1 << 2,
-    hasImm2    = 1 << 1,
-    hasImm3    = 1 << 0,
+    hasImm1    = 1 << 3,
+    hasImm2    = 1 << 2,
+    hasImm3    = 1 << 1,
+    hasImm4    = 1 << 0,
 
-    hasDisp8 = hasDisp0,
-    hasDisp16 = hasDisp0 | hasDisp1,
-    hasDisp32 = hasDisp0 | hasDisp1 | hasDisp2 | hasDisp3,
+    hasDisp8 = hasDisp1,
+    hasDisp16 = hasDisp1 | hasDisp2,
+    hasDisp32 = hasDisp1 | hasDisp2 | hasDisp3 | hasDisp4,
 
-    hasImm8 = hasImm0,
-    hasImm16 = hasImm0 | hasImm1,
-    hasImm32 = hasImm0 | hasImm1 | hasImm2 | hasImm3,
+    hasImm8 = hasImm1,
+    hasImm16 = hasImm1 | hasImm2,
+    hasImm32 = hasImm1 | hasImm2 | hasImm3 | hasImm4,
   } x86Field;
 
   typedef struct x86Instruction {
@@ -806,22 +814,83 @@
     unsigned index;
   } x86Format;
 
+  enum PrefixFlags {
+    hasLock = hasPrefix1,
+    hasRepe = hasPrefix1,
+    hasRepne = hasPrefix1,
+    hasRepz = hasPrefix1,
+    hasRepnz = hasPrefix1,
+
+    hasCS = hasPrefix2,
+    hasSS = hasPrefix2,
+    hasDS = hasPrefix2,
+    hasES = hasPrefix2,
+    hasFS = hasPrefix2,
+    hasGS = hasPrefix2,
+    hasBranch = hasPrefix2,
+    hasNoBranch = hasPrefix2,
+
+    hasOperandSize = hasPrefix3,
+
+    hasAddressSize = hasPrefix4
+  };
+
+  enum PrefixIndices {
+    indexLock = 0,
+    indexRepe = 0,
+    indexRepne = 0,
+    indexRepz = 0,
+    indexRepnz = 0,
+
+    indexCS = 1,
+    indexSS = 1,
+    indexDS = 1,
+    indexES = 1,
+    indexFS = 1,
+    indexGS = 1,
+    indexBranch = 1,
+    indexNoBranch = 1,
+
+    indexOperandSize = 2,
+
+    indexAddressSize = 3
+  };
+
   typedef struct x86Encoding {
     unsigned fields;
-    uint8_t prefixes[4];
-    uint8_t opcodes[3];
+    uint8_t prefix[4];
+    uint8_t opcode[3];
     uint8_t modRM;
-    uint8_t sib;
+    uint8_t xformOp;
+    uint8_t xform[3];
   } x86Encoding;
+
+  // Global variable
+  typedef struct TargetEnv {
+    uint8_t bits;
+    uint8_t operandWBits;
+    uint8_t operandWPrefix;
+    uint8_t addressWBits;
+    uint8_t addressWPrefix;
+  } TargetEnv;
+
+  TargetEnv target = {
+    32,
+    16,
+    0x66,
+    16,
+    0x67
+  };
 
   bool x86Emit( FILE* binFile, x86Instruction* instruction );
 
   bool x86EncodeAddr16( x86Instruction* destInstructionk, x86Addr* addr16 );
   bool x86EncodeAddr32( x86Instruction* destInstructionk, x86Addr* addr32 );
 
-  bool x86GenOpMem( x86Instruction* dest, unsigned mnemonic, x86Addr* addr );
+  bool x86GenOpMem( FILE* binFile, unsigned mnemonic, x86Addr* addr );
 
-  bool x86GenOpRegImm( x86Instruction* dest, unsigned mnemonic, unsigned imm );
+  bool x86GenOpRegImm( FILE* binFile,
+    unsigned mnemonic, unsigned reg, unsigned imm );
 
 /*
  *  Backpatch declarations
@@ -861,11 +930,15 @@ int main( int argc, char* argv[] ) {
 
   FILE* bin = fopen("out", "wb");
   if( bin ) {
-    x86Instruction instruction = {};
-    instruction.fields = (hasOpcode0 | hasImm8);
-    instruction.opcode[0] = 0x14;
-    instruction.immediate = 0x11;
-    x86Emit( bin, &instruction );
+    x86GenOpRegImm( bin, x86Adc, x86RegAL, 0x11 );
+    x86GenOpRegImm( bin, x86Adc, x86RegAX, 0x1122 );
+    x86GenOpRegImm( bin, x86Adc, x86RegEAX, 0x11223344 );
+    x86GenOpRegImm( bin, x86Adc, x86RegCL, 0x11 );
+    x86GenOpRegImm( bin, x86Adc, x86RegBH, 0x11 );
+    x86GenOpRegImm( bin, x86Adc, x86RegCX, 0x1122 );
+    x86GenOpRegImm( bin, x86Adc, x86RegDI, 0x1122 );
+    x86GenOpRegImm( bin, x86Adc, x86RegECX, 0x11223344 );
+    x86GenOpRegImm( bin, x86Adc, x86RegEDI, 0x11223344 );
 
     fclose( bin );
     bin = NULL;
@@ -1866,24 +1939,134 @@ int main( int argc, char* argv[] ) {
  *  Code generator implementation
  */
 
+  const size_t formatStart[] = {
+    /* x86Call   */ -1,
+    /* x86Push   */ -1,
+    /* x86Cbw    */ -1,
+    /* x86Cwd    */ -1,
+    /* x86Clc    */ -1,
+    /* x86Cld    */ -1,
+    /* x86Cli    */ -1,
+    /* x86Cmc    */ -1,
+    /* x86Int3   */ -1,
+    /* x86Iret   */ -1,
+    /* x86Lahf   */ -1,
+    /* x86Nop    */ -1,
+    /* x86Popf   */ -1,
+    /* x86Pushf  */ -1,
+    /* x86Ret    */ -1,
+    /* x86Retf   */ -1,
+    /* x86Sahf   */ -1,
+    /* x86Stc    */ -1,
+    /* x86Std    */ -1,
+    /* x86Sti    */ -1,
+    /* x86Xlat   */ -1,
+    /* x86Xlatb  */ -1,
+    /* x86Adc    */ 0,
+    /* x86Add    */ -1,
+    /* x86And    */ -1,
+    /* x86Cmp    */ -1,
+    /* x86Dec    */ -1,
+    /* x86Div    */ -1,
+    /* x86IDiv   */ -1,
+    /* x86IMul   */ -1,
+    /* x86In     */ -1,
+    /* x86Inc    */ -1,
+    /* x86Int    */ -1,
+    /* x86Jo     */ -1,
+    /* x86Jno    */ -1,
+    /* x86Jb     */ -1,
+    /* x86Jnb    */ -1,
+    /* x86Je     */ -1,
+    /* x86Jne    */ -1,
+    /* x86Jbe    */ -1,
+    /* x86Jnbe   */ -1,
+    /* x86Js     */ -1,
+    /* x86Jns    */ -1,
+    /* x86Jp     */ -1,
+    /* x86Jnp    */ -1,
+    /* x86Jl     */ -1,
+    /* x86Jnl    */ -1,
+    /* x86Jle    */ -1,
+    /* x86Jnle   */ -1,
+    /* x86Rep    */ -1,
+    /* x86Repe   */ -1,
+    /* x86Repne  */ -1,
+    /* x86Repz   */ -1,
+    /* x86Repnz  */ -1,
+    /* x86Lodsb  */ -1,
+    /* x86Lodsw  */ -1,
+    /* x86Movsb  */ -1,
+    /* x86Movsw  */ -1,
+    /* x86Stosb  */ -1,
+    /* x86Stosw  */ -1,
+    /* x86Cmpsb  */ -1,
+    /* x86Cmpsw  */ -1,
+    /* x86Scasb  */ -1,
+    /* x86Scasw  */ -1,
+    /* x86Jcxz   */ -1,
+    /* x86Jmp    */ -1,
+    /* x86Lds    */ -1,
+    /* x86Les    */ -1,
+    /* x86Lea    */ -1,
+    /* x86Loop   */ -1,
+    /* x86Loope  */ -1,
+    /* x86Loopne */ -1,
+    /* x86Loopz  */ -1,
+    /* x86Loopnz */ -1,
+    /* x86Mov    */ -1,
+    /* x86Mul    */ -1,
+    /* x86Neg    */ -1,
+    /* x86Not    */ -1,
+    /* x86Or     */ -1,
+    /* x86Out    */ -1,
+    /* x86Pop    */ -1,
+    /* x86Rcl    */ -1,
+    /* x86Rcr    */ -1,
+    /* x86Rol    */ -1,
+    /* x86Ror    */ -1,
+    /* x86Sal    */ -1,
+    /* x86Sar    */ -1,
+    /* x86Shl    */ -1,
+    /* x86Shr    */ -1,
+    /* x86Sbb    */ -1,
+    /* x86Sub    */ -1,
+    /* x86Test   */ -1,
+    /* x86Xchg   */ -1,
+    /* x86Xor    */ -1
+  };
+  const formatStartCount = sizeof(formatStart) / sizeof(formatStart[0]);
+
   // mnemonic,
   // param0, param1, param2,
   // index
   const x86Format formatTable[] = {
-    x86Adc, 0,
+    /* 0 */ x86Adc, x86RegAL, valUint, 0, 0,
+    /* 1 */ x86Adc, x86RegAX, valUint, 0, 1,
+    /* 2 */ x86Adc, x86RegEAX, valUint, 0, 1,
+    /* 3 */ x86Adc, x86Reg8, valUint, 0, 2,
+    /* 4 */ x86Adc, x86Reg16, valUint, 0, 3,
+    /* 5 */ x86Adc, x86Reg32, valUint, 0, 3,
   };
+  const formatCount = sizeof(formatTable) / sizeof(formatTable[0]);
 
-  const formatSize = sizeof(formatTable) / sizeof(formatTable[0]);
+  enum x86Transform {
+    xformOpW = 1, // Add operand size prefix
+    xformModReg, // Add register to ModRM bits 0..2
+    xformImm8  // S bit in last opcode if imm in [-128..127]
+  };
 
   // fields,
   // prefix0, prefix1, prefix2, prefix3,
   // opcode0, opcode1, opcode2, modRM,
-  // sib, xform0, xform1, xform2
+  // xformop, xform0, xform1, xform2
   const x86Encoding encodeTable[] = {
-    hasOpcode0, 0, 0, 0, 0, 
+    /* 0 */ hasOpcode1, 0, 0, 0, 0, 0x14, 0, 0, 0, 0, 0, 0, 0,
+    /* 1 */ hasOpcode1, 0, 0, 0, 0, 0x15, 0, 0, 0, xformOpW, 0, 0, 0,
+    /* 2 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x80, 0, 0, 0xD0, 0, xformModReg, 0, 0,
+    /* 3 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x81, 0, 0, 0xD0, xformOpW, xformModReg, xformImm8, 0
   };
-
-  const encodeSize = sizeof(encodeTable) / sizeof(encodeTable[0]);
+  const encodeCount = sizeof(encodeTable) / sizeof(encodeTable[0]);
 
   bool x86Emit( FILE* binFile, x86Instruction* instruction ) {
     uint8_t machineCode[sizeof(x86Instruction)];
@@ -1898,13 +2081,13 @@ int main( int argc, char* argv[] ) {
 
     fields = instruction->fields;
 
-    for( index = 0, fieldBit = hasPrefix0; index < 4; index++, fieldBit <<= 1 ) {
+    for( index = 0, fieldBit = hasPrefix1; index < 4; index++, fieldBit <<= 1 ) {
       if( fields & fieldBit ) {
         machineCode[codeLength++] = instruction->prefix[index];
       }
     }
 
-    for( index = 0, fieldBit = hasOpcode0; index < 3; index++, fieldBit <<= 1 ) {
+    for( index = 0, fieldBit = hasOpcode1; index < 3; index++, fieldBit <<= 1 ) {
       if( fields & fieldBit ) {
         machineCode[codeLength++] = instruction->opcode[index];
       }
@@ -1966,12 +2149,154 @@ int main( int argc, char* argv[] ) {
     return false;
   }
 
-  bool x86GenOpMem( x86Instruction* dest, unsigned mnemonic, x86Addr* addr ) {
+  bool x86GenOpMem( FILE* binFile, unsigned mnemonic, x86Addr* addr ) {
     return false;
   }
 
-  bool x86GenOpRegImm( x86Instruction* dest, unsigned mnemonic, unsigned imm ) {
-    return false;
+  bool x86GenOpRegImm( FILE* binFile, unsigned mnemonic, unsigned reg, unsigned imm ) {
+    x86Instruction instruction = {};
+    size_t mnemonicIndex;
+    size_t formatIndex;
+    size_t encodeIndex;
+    unsigned param1;
+    unsigned param2;
+    unsigned param3;
+    unsigned opIndex;
+
+    if( !(binFile && mnemonic && (mnemonic <= lastX86Ident)) ) {
+      return false;
+    }
+
+    mnemonicIndex = mnemonic / sizeof(formatStart[0]);
+    formatIndex = formatStart[mnemonicIndex];
+    if( formatIndex > formatCount ) {
+      return false;
+    }
+
+    do {
+      if( formatTable[formatIndex].mnemonic != mnemonic ) {
+        return false;
+      }
+
+      param1 = formatTable[formatIndex].param[0];
+      param2 = formatTable[formatIndex].param[1];
+      param3 = formatTable[formatIndex].param[2];
+
+      if( param3 == 0 ) {
+        if( param2 == valUint ) {
+          if( (param1 == reg) || ((param1 & x86OperandMask) == (reg & x86OperandMask)) ) {
+            break;
+          }
+        }
+      }
+
+      formatIndex++;
+    } while( formatIndex < formatCount );
+
+    encodeIndex = formatTable[formatIndex].index;
+    if( encodeIndex >= encodeCount ) {
+      return false;
+    }
+
+    // Initialize instruction structure
+    instruction.fields = encodeTable[encodeIndex].fields;
+    switch( reg & x86OperandMask ) {
+    case 0:
+      break;
+
+    case x86Reg8:
+      instruction.fields |= hasImm8;
+      break;
+
+    case x86Reg16:
+      instruction.fields |= hasImm16;
+      break;
+
+    case x86Reg32:
+      instruction.fields |= hasImm32;
+      break;
+
+    default:
+      return false;
+    }
+
+    instruction.prefix[0] = encodeTable[encodeIndex].prefix[0];
+    instruction.prefix[1] = encodeTable[encodeIndex].prefix[1];
+    instruction.prefix[2] = encodeTable[encodeIndex].prefix[2];
+    instruction.prefix[3] = encodeTable[encodeIndex].prefix[3];
+
+    instruction.opcode[0] = encodeTable[encodeIndex].opcode[0];
+    instruction.opcode[1] = encodeTable[encodeIndex].opcode[1];
+    instruction.opcode[2] = encodeTable[encodeIndex].opcode[2];
+
+    instruction.modRM = encodeTable[encodeIndex].modRM;
+
+    instruction.immediate = imm;
+
+    // Mnemonic/Opcode transforms
+    opIndex = 0;
+    switch( encodeTable[encodeIndex].xformOp ) {
+    case 0:
+      break;
+
+    case xformOpW:
+      if( instruction.fields & hasOpcode3 ) {
+        opIndex++;
+      }
+      if( instruction.fields & hasOpcode2 ) {
+        opIndex++;
+      }
+      if( target.bits != target.operandWBits ) {
+        instruction.fields |= hasOperandSize;
+        instruction.prefix[indexOperandSize] = target.operandWPrefix;
+      }
+      break;
+
+    default:
+      return false;
+    }
+
+    // Register transforms
+    switch( encodeTable[encodeIndex].xform[0] ) {
+    case 0:
+      break;
+
+    case xformModReg:
+      instruction.modRM += (reg & (~x86OperandMask));
+      break;
+
+    default:
+      return false;
+    }
+
+    // Immediate transforms
+    opIndex = 0;
+    switch( encodeTable[encodeIndex].xform[0] ) {
+    case 0:
+      break;
+
+    case xformImm8:
+      if( instruction.fields & hasOpcode3 ) {
+        opIndex++;
+      }
+      if( instruction.fields & hasOpcode2 ) {
+        opIndex++;
+      }
+      if( (imm & 0xFFFFFF00) == 0xFFFFFF00 ) {
+        instruction.opcode[opIndex] |= (1 << 1);
+      }
+      break;
+
+    default:
+      return false;
+    }
+
+    // Unused parameter validation
+    if( encodeTable[encodeIndex].xform[0] != 0 ) {
+      return false;
+    }
+
+    return x86Emit(binFile, &instruction);
   }
 
 /*
