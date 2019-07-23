@@ -808,9 +808,14 @@
     int32_t  displacement;
   } x86Addr;
 
+  typedef struct x86FormatParam {
+    unsigned first;
+    unsigned last;
+  } x86FormatParam;
+
   typedef struct x86Format {
     unsigned mnemonic;
-    unsigned param[3];
+    x86FormatParam param[3];
     unsigned index;
   } x86Format;
 
@@ -2038,15 +2043,15 @@ int main( int argc, char* argv[] ) {
   const formatStartCount = sizeof(formatStart) / sizeof(formatStart[0]);
 
   // mnemonic,
-  // param0, param1, param2,
+  // param0first, param0last, param1first, param1last, param2first, param2last,
   // index
   const x86Format formatTable[] = {
-    /* 0 */ x86Adc, x86RegAL, valUint, 0, 0,
-    /* 1 */ x86Adc, x86RegAX, valUint, 0, 1,
-    /* 2 */ x86Adc, x86RegEAX, valUint, 0, 1,
-    /* 3 */ x86Adc, x86Reg8, valUint, 0, 2,
-    /* 4 */ x86Adc, x86Reg16, valUint, 0, 3,
-    /* 5 */ x86Adc, x86Reg32, valUint, 0, 3,
+    /* 0 */ x86Adc, x86RegAL, x86RegAL, valUint, valUint32, 0, 0, 0,
+    /* 1 */ x86Adc, x86RegAX, x86RegAX, valUint, valUint32, 0, 0, 1,
+    /* 2 */ x86Adc, x86RegEAX, x86RegEAX, valUint, valUint32, 0, 0, 1,
+    /* 3 */ x86Adc, x86RegAL, x86RegBH, valUint, valUint32, 0, 0, 2,
+    /* 4 */ x86Adc, x86RegAX, x86RegDI, valUint, valUint32, 0, 0, 3,
+    /* 5 */ x86Adc, x86RegEAX, x86RegEDI, valUint, valUint32, 0, 0, 3,
   };
   const formatCount = sizeof(formatTable) / sizeof(formatTable[0]);
 
@@ -2158,22 +2163,27 @@ int main( int argc, char* argv[] ) {
     size_t mnemonicIndex;
     size_t formatIndex;
     size_t encodeIndex;
-    unsigned param1;
-    unsigned param2;
-    unsigned param3;
+    x86FormatParam param1;
+    x86FormatParam param2;
+    x86FormatParam param3;
     unsigned opIndex;
 
     if( !(binFile && mnemonic && (mnemonic <= lastX86Ident)) ) {
       return false;
     }
 
+printf( "\n" );
+printf( "x86GenOpRegImm(): mnemonic = %u; reg = %u; imm = %u\n", mnemonic, reg, imm );
+
     mnemonicIndex = mnemonic / sizeof(formatStart[0]);
     formatIndex = formatStart[mnemonicIndex];
+printf( "x86GenOpRegImm(): mnemonicIndex = %u; formatIndex = %u\n", mnemonicIndex, formatIndex );
     if( formatIndex > formatCount ) {
       return false;
     }
 
     do {
+printf( "x86GenOpRegMem() loop: formatIndex = %u; formatTable.mnemonic = %u; mnemonic = %u\n", formatIndex, formatTable[formatIndex].mnemonic, mnemonic );
       if( formatTable[formatIndex].mnemonic != mnemonic ) {
         return false;
       }
@@ -2181,10 +2191,12 @@ int main( int argc, char* argv[] ) {
       param1 = formatTable[formatIndex].param[0];
       param2 = formatTable[formatIndex].param[1];
       param3 = formatTable[formatIndex].param[2];
+printf( "x86GenOpRegImm() loop: param1.first = %u; param1.last = %u; param2.first = %u; param2.last = %u; param3.first = %u; param3.last = %u\n", param1.first, param1.last, param2.first, param2.last, param3.first, param3.last );
 
-      if( param3 == 0 ) {
-        if( param2 == valUint ) {
-          if( (param1 == reg) || ((param1 & x86OperandMask) == (reg & x86OperandMask)) ) {
+      if( (param3.first | param3.last) == 0 ) {
+        if( (param2.first >= valUint) && (param2.last <= valUint32) ) {
+          if( (param1.first >= reg) && (param1.last <= reg) ) {
+printf( "x86GenOpRegImm() loop: param1.first == %u; param1.last == %u; reg = %u\n", param1.first, param1.last, reg );
             break;
           }
         }
@@ -2192,14 +2204,17 @@ int main( int argc, char* argv[] ) {
 
       formatIndex++;
     } while( formatIndex < formatCount );
+printf( "x86GenOpRegImm() loop exit: formatIndex = %u; formatCount = %u\n", formatIndex, formatCount );
 
     encodeIndex = formatTable[formatIndex].index;
     if( encodeIndex >= encodeCount ) {
       return false;
     }
+printf( "x86GenOpRegImm(): encodeIndex = %u\n", encodeIndex );
 
     // Initialize instruction structure
     instruction.fields = encodeTable[encodeIndex].fields;
+printf( "x86GenOpRegImm() immField initialized: instruction.fields = %u\n", instruction.fields );
     switch( reg & x86OperandMask ) {
     case 0:
       break;
@@ -2217,62 +2232,72 @@ int main( int argc, char* argv[] ) {
       break;
 
     default:
+printf( "x86GenOpRegImm() immField case default: (reg & x86OperandMask) = %u\n", (reg & x86OperandMask) );
       return false;
     }
+printf( "x86GenOpRegImm() immField modified: instruction.fields = %u\n", instruction.fields );
 
     instruction.prefix[0] = encodeTable[encodeIndex].prefix[0];
     instruction.prefix[1] = encodeTable[encodeIndex].prefix[1];
     instruction.prefix[2] = encodeTable[encodeIndex].prefix[2];
     instruction.prefix[3] = encodeTable[encodeIndex].prefix[3];
+printf( "x86GenOpRegImm(): prefix1 = %u; prefix2 = %u; prefix3 = %u; prefix4 = %u\n", instruction.prefix[0], instruction.prefix[1], instruction.prefix[2], instruction.prefix[3] );
 
     instruction.opcode[0] = encodeTable[encodeIndex].opcode[0];
     instruction.opcode[1] = encodeTable[encodeIndex].opcode[1];
     instruction.opcode[2] = encodeTable[encodeIndex].opcode[2];
+printf( "x86GenOpRegImm(): opcode1 = %X; opcode2 = %X; opcode3 = %X\n", instruction.opcode[0], instruction.opcode[1], instruction.opcode[2] );
 
     instruction.modRM = encodeTable[encodeIndex].modRM;
 
     instruction.immediate = imm;
+printf( "x86GenOpRegImm(): modRM = %X; imm = %u\n", instruction.modRM, instruction.immediate );
 
     // Mnemonic/Opcode transforms
     opIndex = 0;
     switch( encodeTable[encodeIndex].xformOp ) {
     case 0:
+printf( "x86GenOpRegImm() op case 0: xformOp = %u\n", encodeTable[encodeIndex].xformOp );
       break;
 
     case xformOpW:
-      if( instruction.fields & hasOpcode3 ) {
-        opIndex++;
-      }
-      if( instruction.fields & hasOpcode2 ) {
-        opIndex++;
-      }
+printf( "x86GenOpRegImm() op case xformOpW: xformOp = %u (%s)\n", encodeTable[encodeIndex].xformOp, encodeTable[encodeIndex].xformOp == xformOpW ? "xformOpW" : "xform?" );
+printf( "x86GenOpRegImm() op case xformOpW: target.bits = %u; target.opperandWBits = %u\n", target.bits, target.operandWBits );
+printf( "x86GenOpRegImm() op case xformOpW before: fields = %u; indexOperandSize = %u\n", instruction.fields, indexOperandSize );
       if( target.bits != target.operandWBits ) {
         instruction.fields |= hasOperandSize;
         instruction.prefix[indexOperandSize] = target.operandWPrefix;
       }
+printf( "x86GenOpRegImm() op case xformOpW after: fields = %u; indexOperandSize = %u\n", instruction.fields, indexOperandSize );
       break;
 
     default:
+printf( "x86GenOpRegImm() op case default: xformOp = %u\n", encodeTable[encodeIndex].xformOp );
       return false;
     }
 
     // Register transforms
     switch( encodeTable[encodeIndex].xform[0] ) {
     case 0:
+printf( "x86GenOpRegImm() reg case 0: xform1 = %u\n", encodeTable[encodeIndex].xform[0] );
       break;
 
     case xformModReg:
+printf( "x86GenOpRegImm() reg case xformModReg before: modRM = %u\n", instruction.modRM );
       instruction.modRM += (reg & (~x86OperandMask));
+printf( "x86GenOpRegImm() reg case xformModReg after: modRM = %u\n", instruction.modRM );
       break;
 
     default:
+printf( "x86GenOpRegImm() reg case default: xform1 = %u\n", encodeTable[encodeIndex].xform[0] );
       return false;
     }
 
     // Immediate transforms
     opIndex = 0;
-    switch( encodeTable[encodeIndex].xform[0] ) {
+    switch( encodeTable[encodeIndex].xform[1] ) {
     case 0:
+printf( "x86GenOpRegImm() imm case 0: xform1 = %u\n", encodeTable[encodeIndex].xform[1] );
       break;
 
     case xformImm8:
@@ -2282,20 +2307,27 @@ int main( int argc, char* argv[] ) {
       if( instruction.fields & hasOpcode2 ) {
         opIndex++;
       }
+printf( "x86GenOpRegImm() imm case xformImm8 before: fields = %u; imm = %u\n", instruction.fields, imm );
       if( (imm & 0xFFFFFF00) == 0xFFFFFF00 ) {
+        instruction.fields &= (~hasImm32);
+        instruction.fields |= hasImm8;
         instruction.opcode[opIndex] |= (1 << 1);
       }
+printf( "x86GenOpRegImm() imm case xformImm8 after: fields = %u; imm = %u\n", instruction.fields, imm );
       break;
 
     default:
+printf( "x86GenOpRegImm() imm case default: xform1 = %u\n", encodeTable[encodeIndex].xform[1] );
       return false;
     }
 
     // Unused parameter validation
-    if( encodeTable[encodeIndex].xform[0] != 0 ) {
+printf( "x86GenOpRegImm() unusedParam validation: xform1 = %u\n", encodeTable[encodeIndex].xform[2] );
+    if( encodeTable[encodeIndex].xform[2] != 0 ) {
       return false;
     }
 
+printf( "x86GenOpRegImm(): Calling x86Emit()\n" );
     return x86Emit(binFile, &instruction);
   }
 
