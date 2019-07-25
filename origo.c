@@ -165,7 +165,7 @@
 
       // x86 segment/selector register tokens
       x86SReg = (x86Operand + (1 << 4) + 0),
-        x86SRegES,
+        x86SRegES = x86SReg,
         x86SRegCS,
         x86SRegSS,
         x86SRegDS,
@@ -175,7 +175,7 @@
 
       // x86 8-bit register tokens
       x86Reg8 = (x86Operand + (2 << 4) + 0),
-        x86RegAL,
+        x86RegAL = x86Reg8,
         x86RegCL,
         x86RegDL,
         x86RegBL,
@@ -186,7 +186,7 @@
 
       // x86 16-bit register tokens
       x86Reg16 =(x86Operand + (3 << 4) + 0),
-        x86RegAX,
+        x86RegAX = x86Reg16,
         x86RegCX,
         x86RegDX,
         x86RegBX,
@@ -197,7 +197,7 @@
 
       // x86 32-bit register tokens
       x86Reg32 = (x86Operand + (4 << 4) + 0),
-        x86RegEAX,
+        x86RegEAX = x86Reg32,
         x86RegECX,
         x86RegEDX,
         x86RegEBX,
@@ -2103,17 +2103,32 @@ int main( int argc, char* argv[] ) {
 
     fields = instruction->fields;
 
-    for( index = 0, fieldBit = hasPrefix1; index < 4; index++, fieldBit <<= 1 ) {
-printf( "x86Emit(): fields = %X; fieldBit = %X\n", fields, fieldBit );
-      if( fields & fieldBit ) {
-        machineCode[codeLength++] = instruction->prefix[index];
-      }
+    if( fields & hasPrefix1 ) {
+      machineCode[codeLength++] = instruction->prefix[0];
     }
 
-    for( index = 0, fieldBit = hasOpcode1; index < 3; index++, fieldBit <<= 1 ) {
-      if( fields & fieldBit ) {
-        machineCode[codeLength++] = instruction->opcode[index];
-      }
+    if( fields & hasPrefix2 ) {
+      machineCode[codeLength++] = instruction->prefix[1];
+    }
+
+    if( fields & hasPrefix3 ) {
+      machineCode[codeLength++] = instruction->prefix[2];
+    }
+
+    if( fields & hasPrefix4 ) {
+      machineCode[codeLength++] = instruction->prefix[3];
+    }
+
+    if( fields & hasOpcode1 ) {
+      machineCode[codeLength++] = instruction->opcode[0];
+    }
+
+    if( fields & hasOpcode2 ) {
+      machineCode[codeLength++] = instruction->opcode[1];
+    }
+
+    if( fields & hasOpcode3 ) {
+      machineCode[codeLength++] = instruction->opcode[2];
     }
 
     if( fields & hasModRM ) {
@@ -2185,6 +2200,7 @@ printf( "x86Emit(): fields = %X; fieldBit = %X\n", fields, fieldBit );
     x86FormatParam param2;
     x86FormatParam param3;
     unsigned opIndex;
+    unsigned regBits;
 
     if( !(binFile && mnemonic && (mnemonic <= lastX86Ident)) ) {
       return false;
@@ -2211,12 +2227,13 @@ printf( "x86GenOpRegMem() loop: formatIndex = %u; formatTable.mnemonic = %X; mne
       param2 = formatTable[formatIndex].param[1];
       param3 = formatTable[formatIndex].param[2];
 
-      if( (param3.first | param3.last) == 0 ) {
 printf( "x86GenOpRegImm() loop: param3.first = %X; param3.last = %X\n", param3.first, param3.last );
-        if( (param2.first <= valUint) && (valUint32 <= param2.last) ) {
+      if( (param3.first | param3.last) == 0 ) {
 printf( "x86GenOpRegImm() loop: param2.first = %X; param2.last = %X; valUint = %X; valUint32 = %X\n", param2.first, param2.last, valUint, valUint32 );
+        if( (param2.first <= valUint) && (valUint32 <= param2.last) ) {
 printf( "x86GenOpRegImm() loop: param1.first == %X; param1.last == %X; reg = %X\n", param1.first, param1.last, reg );
           if( (param1.first <= reg) && (reg <= param1.last) ) {
+printf( "x86GenOpRegImm() loop match found: formatIndex = %X\n", formatIndex );
             break;
           }
         }
@@ -2228,6 +2245,7 @@ printf( "x86GenOpRegImm() loop exit: formatIndex = %u; formatCount = %u\n", form
 
     encodeIndex = formatTable[formatIndex].index;
     if( encodeIndex >= encodeCount ) {
+printf( "x86GenOpRegImm(): Match not found. Unable to generate instruction.\n", encodeIndex );
       return false;
     }
 printf( "x86GenOpRegImm(): encodeIndex = %u\n", encodeIndex );
@@ -2284,7 +2302,18 @@ printf( "x86GenOpRegImm() op case 0: xformOp = %u\n", encodeTable[encodeIndex].x
 printf( "x86GenOpRegImm() op case xformOpW: xformOp = %u (%s)\n", encodeTable[encodeIndex].xformOp, encodeTable[encodeIndex].xformOp == xformOpW ? "xformOpW" : "xform?" );
 printf( "x86GenOpRegImm() op case xformOpW: target.bits = %u; target.opperandWBits = %u\n", target.bits, target.operandWBits );
 printf( "x86GenOpRegImm() op case xformOpW before: fields = %X; indexOperandSize = %u\n", instruction.fields, indexOperandSize );
-      if( target.bits != target.operandWBits ) {
+      regBits = 0;
+      switch( reg & x86OperandMask ) {
+      case x86Reg16:
+        regBits = 16;
+        break;
+      case x86Reg32:
+        regBits = 32;
+        break;
+      default:
+        return false;
+      }
+      if( target.bits != regBits ) {
         instruction.fields |= hasOperandSize;
         instruction.prefix[indexOperandSize] = target.operandWPrefix;
       }
@@ -2306,8 +2335,8 @@ printf( "x86GenOpRegImm() reg case 0: xform1 = %u\n", encodeTable[encodeIndex].x
 
     case xformModReg:
 printf( "x86GenOpRegImm() reg case xformModReg before: instruction.modRM = %X\n", instruction.modRM );
-      instruction.modRM += (reg & (~x86OperandMask));
-printf( "x86GenOpRegImm() reg case xformModReg after: instruction.modRM = %X; reg & (~x86OperandMask) = %u\n", instruction.modRM, reg & (~x86OperandMask) );
+      instruction.modRM |= (reg - (reg & x86OperandMask));
+printf( "x86GenOpRegImm() reg case xformModReg after: instruction.modRM = %X; reg - (reg & x86OperandMask) = %X\n", instruction.modRM, reg - (reg & x86OperandMask) );
       break;
 
     default:
@@ -2348,6 +2377,13 @@ printf( "x86GenOpRegImm() unusedParam validation: xform3 = %u\n", encodeTable[en
     if( encodeTable[encodeIndex].xform[2] != 0 ) {
       return false;
     }
+
+printf( "x86GenOpRegImm(): Resulting instruction buffer...\n" );
+printf( "x86GenOpRegImm(): fields = %X\n", instruction.fields );
+printf( "x86GenOpRegImm(): prefix1 = %X; prefix2 = %X; prefix3 = %X; prefix4 = %X\n", instruction.prefix[0], instruction.prefix[1], instruction.prefix[2], instruction.prefix[3] );
+printf( "x86GenOpRegImm(): opcode1 = %X; opcode2 = %X; opcode3 = %X; modRM = %X\n", instruction.opcode[0], instruction.opcode[1], instruction.opcode[2], instruction.modRM );
+printf( "x86GenOpRegImm(): sib = %X\n", instruction.sib );
+printf( "x86GenOpRegImm(): displacement = %X; immediate = %X\n", instruction.displacement, instruction.immediate );
 
 printf( "x86GenOpRegImm(): Calling x86Emit()\n\n" );
     return x86Emit(binFile, &instruction);
