@@ -2162,6 +2162,25 @@ int main( int argc, char* argv[] ) {
         (fwrite(machineCode, 1, codeLength, binFile) == codeLength));
   }
 
+  const uint8_t x86Mem16Table[16] = {
+    /*  0 */ 0x38, // Invalid
+    /*  1 */ 0x05, // [DI]
+    /*  2 */ 0x04, // [SI]
+    /*  3 */ 0x38, // Invalid
+    /*  4 */ 0x06, // [BP + <DISP8 | DISP16>] if not [DISP16]
+    /*  5 */ 0x03, // [BP + DI]
+    /*  6 */ 0x02, // [BP + SI]
+    /*  7 */ 0x38, // Invalid
+    /*  8 */ 0x07, // [BX]
+    /*  9 */ 0x01, // [BX + DI]
+    /* 10 */ 0x00, // [BX + SI]
+    /* 11 */ 0x38, // Invalid
+    /* 12 */ 0x38, // Invalid
+    /* 13 */ 0x38, // Invalid
+    /* 14 */ 0x38, // Invalid
+    /* 15 */ 0x38  // Invalid
+  }
+
   bool x86EncodeAddr16( x86Instruction* dest, x86Addr* addr16 ) {
     return false;
   }
