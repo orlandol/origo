@@ -889,8 +889,8 @@
 
   bool x86Emit( FILE* binFile, x86Instruction* instruction );
 
-  bool x86EncodeAddr16( x86Instruction* destInstructionk, x86Addr* addr16 );
-  bool x86EncodeAddr32( x86Instruction* destInstructionk, x86Addr* addr32 );
+  bool x86EncodeAddr16( x86Instruction* instruction, x86Addr* addr16 );
+  bool x86EncodeAddr32( x86Instruction* instruction, x86Addr* addr32 );
 
   bool x86GenOpMem( FILE* binFile, unsigned mnemonic, x86Addr* addr );
 
@@ -933,20 +933,98 @@ int main( int argc, char* argv[] ) {
     return 1;
   }
 
-  FILE* bin = fopen("out", "wb");
-  if( bin ) {
-    x86GenOpRegImm( bin, x86Adc, x86RegAL, 0x11 );
-    x86GenOpRegImm( bin, x86Adc, x86RegAX, 0x1122 );
-    x86GenOpRegImm( bin, x86Adc, x86RegEAX, 0x11223344 );
-    x86GenOpRegImm( bin, x86Adc, x86RegCL, 0x11 );
-    x86GenOpRegImm( bin, x86Adc, x86RegBH, 0x11 );
-    x86GenOpRegImm( bin, x86Adc, x86RegCX, 0x1122 );
-    x86GenOpRegImm( bin, x86Adc, x86RegDI, 0x1122 );
-    x86GenOpRegImm( bin, x86Adc, x86RegECX, 0x11223344 );
-    x86GenOpRegImm( bin, x86Adc, x86RegEDI, 0x11223344 );
+  FILE* binFile = fopen("out", "wb");
+  if( binFile ) {
+    x86Instruction instruction = {};
+    x86Addr addr16 = {};
 
-    fclose( bin );
-    bin = NULL;
+;;;
+    // adc cl, [bx]
+    instruction.fields |= hasOpcode1 | hasModRM;
+    instruction.opcode[0] = 0x12;
+    instruction.modRM = (x86RegCL - x86Reg8) << 3;
+    addr16.baseReg = x86RegBX;
+    x86EncodeAddr16( &instruction, &addr16 );
+    x86Emit( binFile, &instruction );
+    // adc bh, [bx]
+    instruction.fields &= (~hasDisp32);
+    instruction.modRM = (x86RegBH - x86Reg8) << 3;
+    x86EncodeAddr16( &instruction, &addr16 );
+    x86Emit( binFile, &instruction );
+
+    // adc cl, [bx + 0x11]
+    instruction.fields |= hasOpcode1 | hasModRM;
+    instruction.opcode[0] = 0x12;
+    instruction.modRM = (x86RegCL - x86Reg8) << 3;
+    addr16.baseReg = x86RegBX;
+    addr16.displacement = 0x11;
+    x86EncodeAddr16( &instruction, &addr16 );
+    x86Emit( binFile, &instruction );
+    // adc bh, [bx + 0x11]
+    instruction.fields &= (~hasDisp32);
+    instruction.modRM = (x86RegBH - x86Reg8) << 3;
+    x86EncodeAddr16( &instruction, &addr16 );
+    x86Emit( binFile, &instruction );
+
+    // adc cx, [bx + 0x1122]
+    instruction.fields |= hasOpcode1 | hasModRM;
+    instruction.opcode[0] = 0x12;
+    instruction.modRM = (x86RegCX - x86Reg16) << 3;
+    addr16.baseReg = x86RegBX;
+    addr16.displacement = 0x1122;
+    x86EncodeAddr16( &instruction, &addr16 );
+    x86Emit( binFile, &instruction );
+    // adc di, [bx + 0x11]
+    instruction.fields &= (~hasDisp32);
+    instruction.modRM = (x86RegDI - x86Reg16) << 3;
+    x86EncodeAddr16( &instruction, &addr16 );
+    x86Emit( binFile, &instruction );
+
+;;;
+    // adc cl, [bp]
+    instruction.fields |= hasOpcode1 | hasModRM;
+    instruction.opcode[0] = 0x12;
+    instruction.modRM = (x86RegCL - x86Reg8) << 3;
+    addr16.baseReg = x86RegBX;
+    x86EncodeAddr16( &instruction, &addr16 );
+    x86Emit( binFile, &instruction );
+    // adc bh, [bx]
+    instruction.fields &= (~hasDisp32);
+    instruction.modRM = (x86RegBH - x86Reg8) << 3;
+    x86EncodeAddr16( &instruction, &addr16 );
+    x86Emit( binFile, &instruction );
+
+    // adc cl, [bp + 0x11]
+    instruction.fields |= hasOpcode1 | hasModRM;
+    instruction.opcode[0] = 0x12;
+    instruction.modRM = (x86RegCL - x86Reg8) << 3;
+    addr16.baseReg = x86RegBX;
+    addr16.displacement = 0x11;
+    x86EncodeAddr16( &instruction, &addr16 );
+    x86Emit( binFile, &instruction );
+    // adc bh, [bp + 0x11]
+    instruction.fields &= (~hasDisp32);
+    instruction.modRM = (x86RegBH - x86Reg8) << 3;
+    x86EncodeAddr16( &instruction, &addr16 );
+    x86Emit( binFile, &instruction );
+
+    // adc cx, [bp + 0x1122]
+    instruction.fields |= hasPrefix1 | hasOpcode1 | hasModRM;
+    instruction.prefix[indexOperandSize] = 0x66;
+    instruction.opcode[0] = 0x13;
+    instruction.modRM = (x86RegCX - x86Reg16) << 3;
+    addr16.baseReg = x86RegBX;
+    addr16.displacement = 0x1122;
+    x86EncodeAddr16( &instruction, &addr16 );
+    x86Emit( binFile, &instruction );
+    // adc di, [bp + 0x11]
+    instruction.fields &= (~hasDisp32);
+    instruction.modRM = (x86RegDI - x86Reg16) << 3;
+    x86EncodeAddr16( &instruction, &addr16 );
+    x86Emit( binFile, &instruction );
+
+    fclose( binFile );
+    binFile = NULL;
   }
 
   return 0;
@@ -2162,30 +2240,106 @@ int main( int argc, char* argv[] ) {
         (fwrite(machineCode, 1, codeLength, binFile) == codeLength));
   }
 
+  enum AddrReg16 {
+    indexSI = 1,
+    indexDI = 2,
+    baseBX = 4,
+    baseBP = 8
+  };
+
   const uint8_t x86Mem16Table[16] = {
     /*  0 */ 0x38, // Invalid
-    /*  1 */ 0x05, // [DI]
-    /*  2 */ 0x04, // [SI]
+    /*  1 */ 0x04, // [SI]
+    /*  2 */ 0x05, // [DI]
     /*  3 */ 0x38, // Invalid
-    /*  4 */ 0x06, // [BP + <DISP8 | DISP16>] if not [DISP16]
-    /*  5 */ 0x03, // [BP + DI]
-    /*  6 */ 0x02, // [BP + SI]
+    /*  4 */ 0x07, // [BX]
+    /*  5 */ 0x00, // [BX + SI]
+    /*  6 */ 0x01, // [BX + DI]
     /*  7 */ 0x38, // Invalid
-    /*  8 */ 0x07, // [BX]
-    /*  9 */ 0x01, // [BX + DI]
-    /* 10 */ 0x00, // [BX + SI]
+    /*  8 */ 0x08, // [BP + <DISP8 | DISP16>] if not [DISP16]
+    /*  9 */ 0x02, // [BP + SI]
+    /* 10 */ 0x03, // [BP + DI]
     /* 11 */ 0x38, // Invalid
     /* 12 */ 0x38, // Invalid
     /* 13 */ 0x38, // Invalid
     /* 14 */ 0x38, // Invalid
     /* 15 */ 0x38  // Invalid
+  };
+
+  bool x86EncodeAddr16( x86Instruction* instruction, x86Addr* addr16 ) {
+    unsigned baseReg = 0; unsigned indexReg = 0;
+    unsigned* xlateReg[2] = { &baseReg, &indexReg };
+    unsigned* addrReg[2] = { addr16 ? &(addr16->baseReg) : NULL,
+                             addr16 ? &(addr16->indexReg) : NULL };
+    unsigned iteration; int displacement; uint8_t modRM; uint8_t xlateRM;
+
+    if( !(instruction && addr16) ) {
+      return false;
+    }
+    modRM = instruction->modRM;
+    displacement = addr16->displacement;
+
+    for( iteration = 0; iteration < 2; iteration++ ) {
+      switch( (*addrReg[iteration]) ) {
+      case 0:
+        break;
+
+      case x86RegBX:
+        (*xlateReg[iteration]) = baseBX;
+        break;
+
+      case baseBP:
+        (*xlateReg[iteration]) = baseBP;
+        break;
+
+      case indexSI:
+        (*xlateReg[iteration]) = indexSI;
+        break;
+
+      case indexDI:
+        (*xlateReg[iteration]) = indexDI;
+        break;
+
+      default:
+        return false;
+      }
+    }
+    if( (baseReg | indexReg) > 15 ) {
+      return false;
+    }
+
+    xlateRM = x86Mem16Table[baseReg | indexReg];
+    if( xlateRM == 0x38 ) {
+      return false;
+    }
+    modRM |= xlateRM;
+
+    instruction->fields |= hasModRM;
+    instruction->modRM |= modRM;
+
+    if( (baseReg != baseBP) && (displacement == 0) ) {
+      // [base + index]
+    } else if( (displacement >= -128) && (displacement <= 127) ) {
+      // [base + index + disp8]
+      instruction->fields |= hasDisp8;
+      instruction->modRM |= 0x40;
+      instruction->displacement = displacement;
+    } else {
+      // Assume [base + index + disp16]
+      instruction->fields |= hasDisp16;
+      instruction->modRM |= 0x80;
+      instruction->displacement = displacement;
+    }
+
+    if( target.bits != 16 ) {
+      instruction->fields |= hasAddressSize;
+      instruction->prefix[indexAddressSize] = target.addressWPrefix;
+    }
+
+    return true;
   }
 
-  bool x86EncodeAddr16( x86Instruction* dest, x86Addr* addr16 ) {
-    return false;
-  }
-
-  bool x86EncodeAddr32( x86Instruction* dest, x86Addr* addr32 ) {
+  bool x86EncodeAddr32( x86Instruction* instruction, x86Addr* addr32 ) {
     return false;
   }
 
