@@ -892,7 +892,7 @@
   bool x86EncodeAddr16( x86Instruction* instruction, x86Addr* addr16 );
   bool x86EncodeAddr32( x86Instruction* instruction, x86Addr* addr32 );
 
-  bool x86GenOpMem( FILE* binFile, unsigned mnemonic, x86Addr* addr );
+  bool x86GenOpRegMem( FILE* binFile, unsigned mnemonic, x86Addr* addr );
 
   bool x86GenOpRegImm( FILE* binFile,
     unsigned mnemonic, unsigned reg, unsigned imm );
@@ -1574,6 +1574,7 @@ int main( int argc, char* argv[] ) {
     }
 
     (*ident) = dest;
+    (*hashCode) = runningHash;
     return true;
   }
 
@@ -1761,6 +1762,7 @@ int main( int argc, char* argv[] ) {
     }
 
     (*string) = dest;
+    (*hashCode) = runningHash;
     return true;
   }
 
@@ -1827,7 +1829,6 @@ int main( int argc, char* argv[] ) {
     "~",    unaryNot,
     "~=",   assignNot
   };
-
   const size_t numOpers = sizeof(operTable) / sizeof(operTable[0]);
 
   unsigned ReadOperator( RetFile* source ) {
@@ -2268,7 +2269,7 @@ int main( int argc, char* argv[] ) {
     return false;
   }
 
-  bool x86GenOpMem( FILE* binFile, unsigned mnemonic, x86Addr* addr ) {
+  bool x86GenOpRegMem( FILE* binFile, unsigned mnemonic, x86Addr* addr ) {
     return false;
   }
 
