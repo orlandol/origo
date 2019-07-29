@@ -15,16 +15,18 @@
       [IDENT[, ...] ['=' CONSTEXPR]]
     end
 
-    union IDENT => UNIONNAME
+    union IDENT
       [TYPESPEC IDENT[, ...]]
     end
 
-    struct IDENT => STRUCTNAME
-      [TYPESPEC IDENT[, ...] ['=' CONSTEXPR]]
+    struct IDENT
+      [TYPESPEC IDENT[, ...] [= CONSTEXPR]]
       [union '(' TYPESPEC[, ...] ')' IDENT[, ...]]
     end
 
-    type TYPENAME IDENT ['=' CONSTEXPR][, ...]
+    type TYPESPEC IDENT ['=' CONSTEXPR][, ...]
+
+    type union '(' TYPESPEC[, ...] ')' IDENT ['=' '(' CONSTEXPR[, ...] ')'][,...];
 
     newtype TYPESPEC IDENT ['=' CONSTEXPR][, ...]
 

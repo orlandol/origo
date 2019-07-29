@@ -724,14 +724,14 @@
   bool SkipSpace( RetFile* source );
   bool SkipComments( RetFile* source );
 
-  bool ReadIdent( RetFile* source, rstring** ident );
+  bool ReadIdent( RetFile* source, rstring** ident, unsigned* hashCode );
 
   bool ReadBinNum( RetFile* source, unsigned* num );
   bool ReadOctalNum( RetFile* source, unsigned* num );
   bool ReadHexNum( RetFile* source, unsigned* num );
   bool ReadNum( RetFile* source, unsigned* num );
 
-  bool ReadString( RetFile* source, rstring** string );
+  bool ReadString( RetFile* source, rstring** string, unsigned* hashCode );
 
   unsigned ReadOperator( RetFile* source );
 
@@ -935,93 +935,8 @@ int main( int argc, char* argv[] ) {
 
   FILE* binFile = fopen("out", "wb");
   if( binFile ) {
-    x86Instruction instruction = {};
-    x86Addr addr16 = {};
-
-;;;
-    // adc cl, [bx]
-    instruction.fields |= hasOpcode1 | hasModRM;
-    instruction.opcode[0] = 0x12;
-    instruction.modRM = (x86RegCL - x86Reg8) << 3;
-    addr16.baseReg = x86RegBX;
-    x86EncodeAddr16( &instruction, &addr16 );
-    x86Emit( binFile, &instruction );
-    // adc bh, [bx]
-    instruction.fields &= (~hasDisp32);
-    instruction.modRM = (x86RegBH - x86Reg8) << 3;
-    x86EncodeAddr16( &instruction, &addr16 );
-    x86Emit( binFile, &instruction );
-
-    // adc cl, [bx + 0x11]
-    instruction.fields |= hasOpcode1 | hasModRM;
-    instruction.opcode[0] = 0x12;
-    instruction.modRM = (x86RegCL - x86Reg8) << 3;
-    addr16.baseReg = x86RegBX;
-    addr16.displacement = 0x11;
-    x86EncodeAddr16( &instruction, &addr16 );
-    x86Emit( binFile, &instruction );
-    // adc bh, [bx + 0x11]
-    instruction.fields &= (~hasDisp32);
-    instruction.modRM = (x86RegBH - x86Reg8) << 3;
-    x86EncodeAddr16( &instruction, &addr16 );
-    x86Emit( binFile, &instruction );
-
-    // adc cx, [bx + 0x1122]
-    instruction.fields |= hasOpcode1 | hasModRM;
-    instruction.opcode[0] = 0x12;
-    instruction.modRM = (x86RegCX - x86Reg16) << 3;
-    addr16.baseReg = x86RegBX;
-    addr16.displacement = 0x1122;
-    x86EncodeAddr16( &instruction, &addr16 );
-    x86Emit( binFile, &instruction );
-    // adc di, [bx + 0x11]
-    instruction.fields &= (~hasDisp32);
-    instruction.modRM = (x86RegDI - x86Reg16) << 3;
-    x86EncodeAddr16( &instruction, &addr16 );
-    x86Emit( binFile, &instruction );
-
-;;;
-    // adc cl, [bp]
-    instruction.fields |= hasOpcode1 | hasModRM;
-    instruction.opcode[0] = 0x12;
-    instruction.modRM = (x86RegCL - x86Reg8) << 3;
-    addr16.baseReg = x86RegBX;
-    x86EncodeAddr16( &instruction, &addr16 );
-    x86Emit( binFile, &instruction );
-    // adc bh, [bx]
-    instruction.fields &= (~hasDisp32);
-    instruction.modRM = (x86RegBH - x86Reg8) << 3;
-    x86EncodeAddr16( &instruction, &addr16 );
-    x86Emit( binFile, &instruction );
-
-    // adc cl, [bp + 0x11]
-    instruction.fields |= hasOpcode1 | hasModRM;
-    instruction.opcode[0] = 0x12;
-    instruction.modRM = (x86RegCL - x86Reg8) << 3;
-    addr16.baseReg = x86RegBX;
-    addr16.displacement = 0x11;
-    x86EncodeAddr16( &instruction, &addr16 );
-    x86Emit( binFile, &instruction );
-    // adc bh, [bp + 0x11]
-    instruction.fields &= (~hasDisp32);
-    instruction.modRM = (x86RegBH - x86Reg8) << 3;
-    x86EncodeAddr16( &instruction, &addr16 );
-    x86Emit( binFile, &instruction );
-
-    // adc cx, [bp + 0x1122]
-    instruction.fields |= hasPrefix1 | hasOpcode1 | hasModRM;
-    instruction.prefix[indexOperandSize] = 0x66;
-    instruction.opcode[0] = 0x13;
-    instruction.modRM = (x86RegCX - x86Reg16) << 3;
-    addr16.baseReg = x86RegBX;
-    addr16.displacement = 0x1122;
-    x86EncodeAddr16( &instruction, &addr16 );
-    x86Emit( binFile, &instruction );
-    // adc di, [bp + 0x11]
-    instruction.fields &= (~hasDisp32);
-    instruction.modRM = (x86RegDI - x86Reg16) << 3;
-    x86EncodeAddr16( &instruction, &addr16 );
-    x86Emit( binFile, &instruction );
+    x86Instruction instruction;
+    x86Addr addr16;
 
     fclose( binFile );
     binFile = NULL;
@@ -1629,11 +1544,12 @@ int main( int argc, char* argv[] ) {
     return true;
   }
 
-  bool ReadIdent( RetFile* source, rstring** ident ) {
+  bool ReadIdent( RetFile* source, rstring** ident, unsigned* hashCode ) {
     rstring* dest = NULL;
     rstring* tmpDest = NULL;
+    unsigned runningHash = 0;
 
-    if( !(source && ident) ) {
+    if( !(source && ident && hashCode) ) {
       return false;
     }
 
@@ -1803,12 +1719,13 @@ int main( int argc, char* argv[] ) {
     return true;
   }
 
-  bool ReadString( RetFile* source, rstring** string ) {
+  bool ReadString( RetFile* source, rstring** string, unsigned* hashCode ) {
     rstring* dest = NULL;
     rstring* tmpDest = NULL;
+    unsigned runningHash = 0;
     char quoteCh;
 
-    if( !(source && string) ) {
+    if( !(source && string && hashCode) ) {
       return false;
     }
 
@@ -2256,7 +2173,7 @@ int main( int argc, char* argv[] ) {
     /*  5 */ 0x00, // [BX + SI]
     /*  6 */ 0x01, // [BX + DI]
     /*  7 */ 0x38, // Invalid
-    /*  8 */ 0x08, // [BP + <DISP8 | DISP16>] if not [DISP16]
+    /*  8 */ 0x06, // [BP + <DISP8 | DISP16>] if not [DISP16]
     /*  9 */ 0x02, // [BP + SI]
     /* 10 */ 0x03, // [BP + DI]
     /* 11 */ 0x38, // Invalid
@@ -2267,11 +2184,12 @@ int main( int argc, char* argv[] ) {
   };
 
   bool x86EncodeAddr16( x86Instruction* instruction, x86Addr* addr16 ) {
-    unsigned baseReg = 0; unsigned indexReg = 0;
-    unsigned* xlateReg[2] = { &baseReg, &indexReg };
-    unsigned* addrReg[2] = { addr16 ? &(addr16->baseReg) : NULL,
-                             addr16 ? &(addr16->indexReg) : NULL };
-    unsigned iteration; int displacement; uint8_t modRM; uint8_t xlateRM;
+    unsigned baseReg = 0;
+    unsigned indexReg = 0;
+    unsigned iteration;
+    int displacement;
+    uint8_t modRM;
+    uint8_t xlateRM;
 
     if( !(instruction && addr16) ) {
       return false;
@@ -2279,31 +2197,38 @@ int main( int argc, char* argv[] ) {
     modRM = instruction->modRM;
     displacement = addr16->displacement;
 
-    for( iteration = 0; iteration < 2; iteration++ ) {
-      switch( (*addrReg[iteration]) ) {
-      case 0:
-        break;
+    switch( addr16->baseReg ) {
+    case 0:
+      break;
 
-      case x86RegBX:
-        (*xlateReg[iteration]) = baseBX;
-        break;
+    case x86RegBX:
+      baseReg = baseBX;
+      break;
 
-      case baseBP:
-        (*xlateReg[iteration]) = baseBP;
-        break;
+    case x86RegBP:
+      baseReg = baseBP;
+      break;
 
-      case indexSI:
-        (*xlateReg[iteration]) = indexSI;
-        break;
-
-      case indexDI:
-        (*xlateReg[iteration]) = indexDI;
-        break;
-
-      default:
-        return false;
-      }
+    default:
+      return false;
     }
+
+    switch( addr16->indexReg ) {
+    case 0:
+      break;
+
+    case x86RegSI:
+      indexReg = indexSI;
+      break;
+
+    case x86RegDI:
+      indexReg = indexDI;
+      break;
+
+    default:
+      return false;
+    }
+
     if( (baseReg | indexReg) > 15 ) {
       return false;
     }
