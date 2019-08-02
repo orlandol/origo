@@ -2266,6 +2266,10 @@ int main( int argc, char* argv[] ) {
   }
 
   bool x86EncodeAddr32( x86Instruction* instruction, x86Addr* addr32 ) {
+    if( !(instruction && addr32) ) {
+      return false;
+    }
+
     return false;
   }
 
