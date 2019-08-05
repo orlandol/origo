@@ -931,9 +931,11 @@
     addr32.scale = scale;
     addr32.displacement = displacement;
 
-    x86EncodeAddr32( &instruction, &addr32 );
+    if( x86EncodeAddr32(&instruction, &addr32) ) {
+      return x86Emit(binFile, &instruction);
+    }
 
-    return x86Emit(binFile, &instruction);
+    return false;
   }
 
 /*
@@ -963,16 +965,20 @@ int main( int argc, char* argv[] ) {
   FILE* binFile = fopen("out", "wb");
   if( binFile ) {
 ;;;
+/*
+    // [base]
     TestAddr32( binFile, x86RegCL, x86RegEAX,  0, 0, 0 );
     TestAddr32( binFile, x86RegBH, x86RegEDI,  0, 0, 0 );
     TestAddr32( binFile, x86RegCL, x86RegESP,  0, 0, 0 );
     TestAddr32( binFile, x86RegCL, x86RegEBP,  0, 0, 0 );
 
+    // [disp]
     TestAddr32( binFile, x86RegCL, 0,  0, 0, 0x11 );
     TestAddr32( binFile, x86RegBH, 0,  0, 0, 0x11 );
     TestAddr32( binFile, x86RegCL, 0,  0, 0, 0x11223344 );
     TestAddr32( binFile, x86RegBH, 0,  0, 0, 0x11223344 );
 
+    // [base + disp]
     TestAddr32( binFile, x86RegCL, x86RegEAX,  0, 0, 0x11 );
     TestAddr32( binFile, x86RegBH, x86RegEDI,  0, 0, 0x11 );
     TestAddr32( binFile, x86RegCL, x86RegEAX,  0, 0, 0x11223344 );
@@ -985,6 +991,43 @@ int main( int argc, char* argv[] ) {
     TestAddr32( binFile, x86RegBH, x86RegEBP,  0, 0, 0x11 );
     TestAddr32( binFile, x86RegCL, x86RegEBP,  0, 0, 0x11223344 );
     TestAddr32( binFile, x86RegBH, x86RegEBP,  0, 0, 0x11223344 );
+
+    // [index * scale]
+    TestAddr32( binFile, x86RegCL, 0, x86RegEAX,  1, 0 );
+    TestAddr32( binFile, x86RegBH, 0, x86RegEDI,  1, 0 );
+    TestAddr32( binFile, x86RegCL, 0, x86RegEBP,  1, 0 );
+    TestAddr32( binFile, x86RegBH, 0, x86RegEBP,  1, 0 );
+    TestAddr32( binFile, x86RegCL, 0, x86RegEAX,  2, 0 );
+    TestAddr32( binFile, x86RegBH, 0, x86RegEDI,  2, 0 );
+    TestAddr32( binFile, x86RegCL, 0, x86RegEBP,  2, 0 );
+    TestAddr32( binFile, x86RegBH, 0, x86RegEBP,  2, 0 );
+    TestAddr32( binFile, x86RegCL, 0, x86RegEAX,  4, 0 );
+    TestAddr32( binFile, x86RegBH, 0, x86RegEDI,  4, 0 );
+    TestAddr32( binFile, x86RegCL, 0, x86RegEBP,  4, 0 );
+    TestAddr32( binFile, x86RegBH, 0, x86RegEBP,  4, 0 );
+    TestAddr32( binFile, x86RegCL, 0, x86RegEAX,  8, 0 );
+    TestAddr32( binFile, x86RegBH, 0, x86RegEDI,  8, 0 );
+    TestAddr32( binFile, x86RegCL, 0, x86RegEBP,  8, 0 );
+    TestAddr32( binFile, x86RegBH, 0, x86RegEBP,  8, 0 );
+
+    // [index * scale + disp]
+    TestAddr32( binFile, x86RegCL, 0, x86RegEAX,  1, 0x11223344 );
+    TestAddr32( binFile, x86RegBH, 0, x86RegEDI,  1, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, 0, x86RegEBP,  1, 0x11223344 );
+    TestAddr32( binFile, x86RegBH, 0, x86RegEBP,  1, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, 0, x86RegEAX,  2, 0x11223344 );
+    TestAddr32( binFile, x86RegBH, 0, x86RegEDI,  2, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, 0, x86RegEBP,  2, 0x11223344 );
+    TestAddr32( binFile, x86RegBH, 0, x86RegEBP,  2, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, 0, x86RegEAX,  4, 0x11223344 );
+    TestAddr32( binFile, x86RegBH, 0, x86RegEDI,  4, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, 0, x86RegEBP,  4, 0x11223344 );
+    TestAddr32( binFile, x86RegBH, 0, x86RegEBP,  4, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, 0, x86RegEAX,  8, 0x11223344 );
+    TestAddr32( binFile, x86RegBH, 0, x86RegEDI,  8, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, 0, x86RegEBP,  8, 0x11223344 );
+*/
+    TestAddr32( binFile, x86RegBH, 0, x86RegEBP,  8, 0x11223344 );
 
     fclose( binFile );
     binFile = NULL;
@@ -2315,94 +2358,7 @@ int main( int argc, char* argv[] ) {
 
 ;;;
   bool x86EncodeAddr32( x86Instruction* instruction, x86Addr* addr32 ) {
-    x86Instruction tempInstruction;
-
-    if( !(instruction && addr32 && (addr32->indexReg != x86RegESP)) ) {
-      return false;
-    }
-
-    switch( (addr32->baseReg | addr32->indexReg) & x86OperandMask ) {
-    case 0:
-    case x86Reg32:
-      break;
-    default:
-      return false;
-    }
-
-    if( (addr32->indexReg == 0) && addr32->scale ) {
-      return false;
-    }
- 
-   // Trivially return standalone displacement
-    if( (addr32->baseReg | addr32->indexReg) == 0 ) {
-      instruction->fields |= (hasModRM | hasDisp32);
-      instruction->modRM |= 0x05;
-      instruction->displacement = addr32->displacement;
-      return true;
-    }
-
-    tempInstruction = *instruction;
-
-    // Assume base register in modRM
-    tempInstruction.fields |= hasModRM;
-    tempInstruction.modRM |= (addr32->baseReg - x86Reg32);
-
-    // Promote modRM to SIB if applicable
-    if( addr32->baseReg || addr32->indexReg || addr32->scale ) {
-      tempInstruction.fields |= hasSIB;
-
-      tempInstruction.sib = (0x04 << 3) | (tempInstruction.modRM & 7);
-      tempInstruction.modRM = (tempInstruction.modRM & (~7)) | 0x04;
-    }
-
-    if( (addr32->baseReg == x86RegEBP) || (addr32->indexReg == x86RegEBP) ) {
-      tempInstruction.fields |= hasDisp8;
-    }
-
-    if( addr32->indexReg ) {
-      if( addr32->baseReg == 0 ) {
-        tempInstruction.fields |= hasDisp32;
-      }
-
-      tempInstruction.sib = (tempInstruction.sib & (~0x38)) |
-        ((addr32->indexReg - x86Reg32) << 3);
-    }
-
-    if( (addr32->baseReg == x86RegEBP) || addr32->displacement ) {
-      tempInstruction.fields |= hasDisp8;
-      tempInstruction.modRM += 0x40;
-      if( (addr32->displacement < -128) || (addr32->displacement > 127) ) {
-        tempInstruction.fields |= hasDisp32;
-        tempInstruction.modRM += 0x40;
-      }
-
-      tempInstruction.displacement = addr32->displacement;
-    } else if( addr32->indexReg ) {
-      tempInstruction.fields |= hasDisp32;
-      tempInstruction.displacement = addr32->displacement;
-
-      switch( addr32->scale ) {
-      case 8:
-        tempInstruction.sib += 0x40;
-
-      case 4:
-        tempInstruction.sib += 0x40;
-
-      case 2:
-        tempInstruction.sib += 0x40;
-
-      case 0:
-      case 1:
-        break;
-
-      default:
-        return false;
-      }
-    }
-
-    *instruction = tempInstruction;
-
-    return true;
+    return false;
   }
 
   bool x86GenOpRegMem( FILE* binFile, unsigned mnemonic, x86Addr* addr ) {
