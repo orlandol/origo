@@ -971,6 +971,7 @@ int main( int argc, char* argv[] ) {
     TestAddr32( binFile, x86RegBH, x86RegEDI,  0, 0, 0 );
     TestAddr32( binFile, x86RegCL, x86RegESP,  0, 0, 0 );
     TestAddr32( binFile, x86RegCL, x86RegEBP,  0, 0, 0 );
+*/
 
     // [disp]
     TestAddr32( binFile, x86RegCL, 0,  0, 0, 0x11 );
@@ -978,6 +979,7 @@ int main( int argc, char* argv[] ) {
     TestAddr32( binFile, x86RegCL, 0,  0, 0, 0x11223344 );
     TestAddr32( binFile, x86RegBH, 0,  0, 0, 0x11223344 );
 
+/*
     // [base + disp]
     TestAddr32( binFile, x86RegCL, x86RegEAX,  0, 0, 0x11 );
     TestAddr32( binFile, x86RegBH, x86RegEDI,  0, 0, 0x11 );
@@ -1026,8 +1028,8 @@ int main( int argc, char* argv[] ) {
     TestAddr32( binFile, x86RegCL, 0, x86RegEAX,  8, 0x11223344 );
     TestAddr32( binFile, x86RegBH, 0, x86RegEDI,  8, 0x11223344 );
     TestAddr32( binFile, x86RegCL, 0, x86RegEBP,  8, 0x11223344 );
-*/
     TestAddr32( binFile, x86RegBH, 0, x86RegEBP,  8, 0x11223344 );
+*/
 
     fclose( binFile );
     binFile = NULL;
@@ -2358,6 +2360,25 @@ int main( int argc, char* argv[] ) {
 
 ;;;
   bool x86EncodeAddr32( x86Instruction* instruction, x86Addr* addr32 ) {
+    x86Instruction tempInstruction = {};
+    x86Addr tempAddr = {};
+
+    if( !(instruction && addr32 && (addr32->indexReg != x86RegESP)) ) {
+      return false;
+    }
+
+    tempInstruction = *instruction;
+    tempAddr = *addr32;
+
+    if( (tempAddr.baseReg | tempAddr.indexReg) == 0 ) {
+      tempInstruction.fields |= hasModRM | hasDisp32;
+      tempInstruction.modRM |= 0x05;
+      tempInstruction.displacement = tempAddr.displacement;
+
+      *instruction = tempInstruction;
+      return true;
+    }
+
     return false;
   }
 
