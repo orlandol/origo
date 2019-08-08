@@ -167,16 +167,18 @@
       // x86 segment/selector register tokens
       x86SReg = (x86Operand + (1 << 4) + 0),
         x86SRegES = x86SReg,
+          firstX86SReg = x86SRegES,
         x86SRegCS,
         x86SRegSS,
         x86SRegDS,
         x86SRegFS,
         x86SRegGS,
-        lastX86SReg = x86SRegGS,
+          lastX86SReg = x86SRegGS,
 
       // x86 8-bit register tokens
       x86Reg8 = (x86Operand + (2 << 4) + 0),
         x86RegAL = x86Reg8,
+          firstX86Reg8 = x86RegAL,
         x86RegCL,
         x86RegDL,
         x86RegBL,
@@ -184,10 +186,12 @@
         x86RegCH,
         x86RegDH,
         x86RegBH,
+          lastX86Reg8 = x86RegBH,
 
       // x86 16-bit register tokens
       x86Reg16 =(x86Operand + (3 << 4) + 0),
         x86RegAX = x86Reg16,
+          firstX86Reg16 = x86RegAX,
         x86RegCX,
         x86RegDX,
         x86RegBX,
@@ -195,10 +199,12 @@
         x86RegBP,
         x86RegSI,
         x86RegDI,
+          lastX86Reg16 = x86RegDI,
 
       // x86 32-bit register tokens
       x86Reg32 = (x86Operand + (4 << 4) + 0),
         x86RegEAX = x86Reg32,
+          firstX86Reg32 = x86RegEAX,
         x86RegECX,
         x86RegEDX,
         x86RegEBX,
@@ -206,6 +212,7 @@
         x86RegEBP,
         x86RegESI,
         x86RegEDI,
+          lastX86Reg32 = x86RegEDI,
 
       // x86 mnemonic tokens
     x86Ident = (6 << 9),
@@ -913,7 +920,6 @@
  *  Temp test functions
  */
 
-;;;
   bool TestAddr32( FILE* binFile, unsigned destReg, unsigned baseReg, unsigned indexReg, uint8_t scale, int displacement ) {
     x86Instruction instruction = {};
     x86Addr addr32 = {};
@@ -965,13 +971,11 @@ int main( int argc, char* argv[] ) {
   FILE* binFile = fopen("out", "wb");
   if( binFile ) {
 ;;;
-/*
     // [base]
     TestAddr32( binFile, x86RegCL, x86RegEAX,  0, 0, 0 );
     TestAddr32( binFile, x86RegBH, x86RegEDI,  0, 0, 0 );
     TestAddr32( binFile, x86RegCL, x86RegESP,  0, 0, 0 );
     TestAddr32( binFile, x86RegCL, x86RegEBP,  0, 0, 0 );
-*/
 
     // [disp]
     TestAddr32( binFile, x86RegCL, 0,  0, 0, 0x11 );
@@ -979,7 +983,6 @@ int main( int argc, char* argv[] ) {
     TestAddr32( binFile, x86RegCL, 0,  0, 0, 0x11223344 );
     TestAddr32( binFile, x86RegBH, 0,  0, 0, 0x11223344 );
 
-/*
     // [base + disp]
     TestAddr32( binFile, x86RegCL, x86RegEAX,  0, 0, 0x11 );
     TestAddr32( binFile, x86RegBH, x86RegEDI,  0, 0, 0x11 );
@@ -1029,7 +1032,6 @@ int main( int argc, char* argv[] ) {
     TestAddr32( binFile, x86RegBH, 0, x86RegEDI,  8, 0x11223344 );
     TestAddr32( binFile, x86RegCL, 0, x86RegEBP,  8, 0x11223344 );
     TestAddr32( binFile, x86RegBH, 0, x86RegEBP,  8, 0x11223344 );
-*/
 
     fclose( binFile );
     binFile = NULL;
@@ -2370,16 +2372,88 @@ int main( int argc, char* argv[] ) {
     tempInstruction = *instruction;
     tempAddr = *addr32;
 
+    if( (tempAddr.baseReg || tempAddr.indexReg) &&
+        (((tempAddr.baseReg | tempAddr.indexReg) & x86OperandMask) != x86Reg32) ) {
+      return false;
+    }
+
+    if( (tempAddr.baseReg > lastX86Reg32) || (tempAddr.indexReg > lastX86Reg32) ) {
+      return false;
+    }
+
+    if( (tempAddr.indexReg == 0) && tempAddr.scale ) {
+      return false;
+    }
+
     if( (tempAddr.baseReg | tempAddr.indexReg) == 0 ) {
       tempInstruction.fields |= hasModRM | hasDisp32;
       tempInstruction.modRM |= 0x05;
       tempInstruction.displacement = tempAddr.displacement;
-
       *instruction = tempInstruction;
       return true;
     }
 
-    return false;
+    tempInstruction.fields |= hasModRM;
+    tempInstruction.modRM = (tempInstruction.modRM & (~7));
+    if( tempAddr.baseReg ) {
+      tempInstruction.modRM |= (tempAddr.baseReg - firstX86Reg32);
+    }
+
+    if( (tempAddr.baseReg == x86RegEBP) || tempAddr.displacement ) {
+      if( (tempAddr.displacement >= -128) && (tempAddr.displacement <= 127) ) {
+        tempInstruction.fields |= hasDisp8;
+        tempInstruction.modRM |= 0x40;
+      } else {
+        tempInstruction.fields |= hasDisp32;
+        tempInstruction.modRM |= 0x80;
+      }
+      tempInstruction.displacement = tempAddr.displacement;
+    }
+
+    if( (tempAddr.baseReg == x86RegESP) || (tempAddr.indexReg) ) {
+      tempInstruction.fields |= hasSIB;
+      tempInstruction.sib = (0x04 << 3);
+      if( tempAddr.baseReg ) {
+        tempInstruction.sib |= (tempInstruction.modRM & 7);
+      } else {
+        tempInstruction.sib |= 0x04;
+      }
+      tempInstruction.modRM = (tempInstruction.modRM & (~7)) | 0x04;
+    }
+
+    if( tempAddr.indexReg ) {
+      if( tempAddr.baseReg == 0 ) {
+        tempInstruction.fields |= hasDisp32;
+        tempInstruction.modRM &= 0x3F;
+      }
+
+      tempInstruction.sib = (tempInstruction.sib & (~0x3F)) |
+          ((tempAddr.indexReg - firstX86Reg32) << 3) | 0x05;
+
+      switch( tempAddr.scale ) {
+      case 0:
+      case 1:
+        break;
+
+      case 2:
+        tempInstruction.sib |= (1 << 6);
+        break;
+
+      case 4:
+        tempInstruction.sib |= (2 << 6);
+        break;
+
+      case 8:
+        tempInstruction.sib |= (3 << 6);
+        break;
+
+      default:
+        return false;
+      }
+    }
+
+    *instruction = tempInstruction;
+    return true;
   }
 
   bool x86GenOpRegMem( FILE* binFile, unsigned mnemonic, x86Addr* addr ) {
