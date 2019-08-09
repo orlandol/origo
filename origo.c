@@ -1033,6 +1033,126 @@ int main( int argc, char* argv[] ) {
     TestAddr32( binFile, x86RegCL, 0, x86RegEBP,  8, 0x11223344 );
     TestAddr32( binFile, x86RegBH, 0, x86RegEBP,  8, 0x11223344 );
 
+    // [base + index * scale]
+    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEAX,  1, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEDI,  1, 0 );
+    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEAX,  2, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEDI,  2, 0 );
+    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEAX,  4, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEDI,  4, 0 );
+    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEAX,  8, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEDI,  8, 0 );
+
+    // [base + ebp * scale]
+    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEBP,  1, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEBP,  1, 0 );
+    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEBP,  2, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEBP,  2, 0 );
+    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEBP,  4, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEBP,  4, 0 );
+    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEBP,  8, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEBP,  8, 0 );
+
+    // [esp + index * scale]
+    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEAX,  1, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEDI,  1, 0 );
+    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEAX,  2, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEDI,  2, 0 );
+    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEAX,  4, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEDI,  4, 0 );
+    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEAX,  8, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEDI,  8, 0 );
+
+    // [esp + ebp * scale]
+    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEBP,  1, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEBP,  1, 0 );
+    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEBP,  2, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEBP,  2, 0 );
+    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEBP,  4, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEBP,  4, 0 );
+    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEBP,  8, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEBP,  8, 0 );
+
+    // [ebp + index * scale]
+    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEAX,  1, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEDI,  1, 0 );
+    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEAX,  2, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEDI,  2, 0 );
+    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEAX,  4, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEDI,  4, 0 );
+    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEAX,  8, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEDI,  8, 0 );
+
+    // [ebp + ebp * scale]
+    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEBP,  1, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEBP,  1, 0 );
+    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEBP,  2, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEBP,  2, 0 );
+    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEBP,  4, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEBP,  4, 0 );
+    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEBP,  8, 0 );
+    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEBP,  8, 0 );
+
+    // [base + index * scale + disp]
+    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEAX,  1, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEDI,  1, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEAX,  2, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEDI,  2, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEAX,  4, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEDI,  4, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEAX,  8, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEDI,  8, 0x11223344 );
+
+    // [base + ebp * scale + disp]
+    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEBP,  1, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEBP,  1, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEBP,  2, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEBP,  2, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEBP,  4, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEBP,  4, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEBP,  8, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEBP,  8, 0x11223344 );
+
+    // [esp + index * scale + disp]
+    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEAX,  1, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEDI,  1, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEAX,  2, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEDI,  2, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEAX,  4, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEDI,  4, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEAX,  8, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEDI,  8, 0x11223344 );
+
+    // [esp + ebp * scale + disp]
+    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEBP,  1, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEBP,  1, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEBP,  2, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEBP,  2, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEBP,  4, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEBP,  4, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEBP,  8, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEBP,  8, 0x11223344 );
+
+    // [ebp + index * scale + disp]
+    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEAX,  1, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEDI,  1, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEAX,  2, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEDI,  2, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEAX,  4, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEDI,  4, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEAX,  8, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEDI,  8, 0x11223344 );
+
+    // [ebp + ebp * scale + disp]
+    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEBP,  1, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEBP,  1, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEBP,  2, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEBP,  2, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEBP,  4, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEBP,  4, 0x11223344 );
+    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEBP,  8, 0x11 );
+    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEBP,  8, 0x11223344 );
+
     fclose( binFile );
     binFile = NULL;
   }
@@ -2425,10 +2545,13 @@ int main( int argc, char* argv[] ) {
       if( tempAddr.baseReg == 0 ) {
         tempInstruction.fields |= hasDisp32;
         tempInstruction.modRM &= 0x3F;
+  
+        tempInstruction.sib = (tempInstruction.sib & (~0x3F)) |
+            ((tempAddr.indexReg - firstX86Reg32) << 3) | 0x05;
+      } else {
+        tempInstruction.sib = (tempInstruction.sib & (~0x38)) |
+            ((tempAddr.indexReg - firstX86Reg32) << 3);
       }
-
-      tempInstruction.sib = (tempInstruction.sib & (~0x3F)) |
-          ((tempAddr.indexReg - firstX86Reg32) << 3) | 0x05;
 
       switch( tempAddr.scale ) {
       case 0:
