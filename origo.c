@@ -812,6 +812,7 @@
     unsigned baseReg;
     unsigned indexReg;
     unsigned scale;
+    unsigned dispSize;
     int32_t  displacement;
   } x86Addr;
 
@@ -899,7 +900,44 @@
   bool x86EncodeAddr16( x86Instruction* instruction, x86Addr* addr16 );
   bool x86EncodeAddr32( x86Instruction* instruction, x86Addr* addr32 );
 
-  bool x86GenOpRegMem( FILE* binFile, unsigned mnemonic, x86Addr* addr );
+  bool x86GenOp( FILE* binFile, unsigned mnemonic );
+
+  bool x86GenRepOp( FILE* binFile, unsigned repMnemonic, unsigned mnemonic );
+
+  bool x86GenOpReg( FILE* binFile, unsigned mnemonic, unsigned reg );
+  bool x86GenOpMem( FILE* binFile, unsigned mnemonic,
+    unsigned segOverride, x86Addr* addr );
+  bool x86GenOpImm( FILE* binFile, unsigned mnemonic, unsigned imm );
+
+  bool x86GenOpDisp( FILE* binFile, unsigned mnemonic, int disp );
+
+  bool x86GenOpFarDisp( FILE* binFile, unsigned mnemonic,
+    unsigned seg, unsigned offset );
+
+  bool x86GenOpMemRegImm( FILE* binFile, unsigned segOverride, x86Addr* addr,
+    unsigned reg, unsigned imm );
+
+  bool x86GenOpRegMemImm( FILE* binFile, unsigned mnemonic,
+    unsigned destReg, unsigned segOverride, x86Addr* addr,
+    unsigned imm );
+
+  bool x86GenOpRegRegReg( FILE* binFile, unsigned mnemonic,
+    unsigned reg1, unsigned reg2, unsigned reg3 );
+
+  bool x86GenOpRegRegImm( FILE* binFile, unsigned mnemonic,
+    unsigned destReg, unsigned srcReg, unsigned imm );
+
+  bool x86GenOpRegMem( FILE* binFile, unsigned mnemonic,
+    unsigned destReg, unsigned segOverride, x86Addr* addr );
+
+  bool x86GenOpMemReg( FILE* binFile, unsigned mnemonic,
+    unsigned segOverride, x86Addr* addr, unsigned srcReg );
+
+  bool x86GenOpRegReg( FILE* binFile,
+    unsigned mnemonic, unsigned destReg, unsigned srcReg );
+
+  bool x86GenOpMemImm( FILE* binFile,
+    unsigned mnemonic, unsigned segOverride, x86Addr* addr32, unsigned imm );
 
   bool x86GenOpRegImm( FILE* binFile,
     unsigned mnemonic, unsigned reg, unsigned imm );
@@ -2579,7 +2617,8 @@ int main( int argc, char* argv[] ) {
     return true;
   }
 
-  bool x86GenOpRegMem( FILE* binFile, unsigned mnemonic, x86Addr* addr ) {
+  bool x86GenOpRegMem( FILE* binFile, unsigned mnemonic,
+      unsigned destReg, unsigned segOverride, x86Addr* addr ) {
     return false;
   }
 
