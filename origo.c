@@ -76,16 +76,22 @@
     // Literal value tokens
     valImmediate = (2 << 9),
       valInt = (valImmediate + (0 << 5)),
+          firstValInt = valInt,
         valInt8,
         valInt16,
         valInt32,
+          lastValInt = valInt32,
 
       valUint = (valImmediate + (1 << 5)),
+          firstValUint = valUint,
         valUint8,
         valUint16,
         valUint32,
+          lastValUint = valUint32,
 
       valChar = (valImmediate + (2 << 5)),
+          firstValChar = valChar,
+          lastValChar = valChar,
 
     // Operator tokens
     operSymbol = (3 << 9),
@@ -163,6 +169,8 @@
 
       // x86 memory address
       x86Mem  = (x86Operand + (0 << 4) + 0),
+        firstX86Mem = x86Mem,
+        lastX86Mem = x86Mem,
 
       // x86 segment/selector register tokens
       x86SReg = (x86Operand + (1 << 4) + 0),
@@ -219,26 +227,10 @@
       x86Call,
         firstX86Ident = x86Call,
       x86Push,
-      x86Cbw,
-      x86Cwd,
-      x86Clc,
-      x86Cld,
-      x86Cli,
-      x86Cmc,
-      x86Int3,
-      x86Iret,
-      x86Lahf,
-      x86Nop,
       x86Popf,
       x86Pushf,
       x86Ret,
       x86Retf,
-      x86Sahf,
-      x86Stc,
-      x86Std,
-      x86Sti,
-      x86Xlat,
-      x86Xlatb,
       x86Adc,
       x86Add,
       x86And,
@@ -251,7 +243,7 @@
       x86Inc,
       x86Int,
       x86Jo,
-        x86JCC = x86Jo,
+        firstX86Jcc = x86Jo,
       x86Jno,
       x86Jb,
         x86Jc = x86Jb,
@@ -281,21 +273,7 @@
         x86Jng = x86Jle,
       x86Jnle,
         x86Jg = x86Jnle,
-      x86Rep,
-      x86Repe,
-      x86Repne,
-      x86Repz,
-      x86Repnz,
-      x86Lodsb,
-      x86Lodsw,
-      x86Movsb,
-      x86Movsw,
-      x86Stosb,
-      x86Stosw,
-      x86Cmpsb,
-      x86Cmpsw,
-      x86Scasb,
-      x86Scasw,
+          lastX86Jcc = x86Jnle,
       x86Jcxz,
       x86Jmp,
       x86Lds,
@@ -320,13 +298,51 @@
       x86Sal,
       x86Sar,
       x86Shl,
+      x86Shld,
       x86Shr,
+      x86Shrd,
       x86Sbb,
       x86Sub,
       x86Test,
       x86Xchg,
       x86Xor,
-        lastX86Ident = x86Xor
+      x86Cbw,
+      x86Cdq,
+      x86Cwd,
+      x86Clc,
+      x86Cld,
+      x86Cli,
+      x86Cmc,
+      x86Int3,
+      x86Iret,
+      x86Lahf,
+      x86Nop,
+      x86Rep,
+      x86Repe,
+      x86Repne,
+      x86Repz,
+      x86Repnz,
+      x86Cmpsb,
+      x86Cmpsw,
+      x86Cmpsd,
+      x86Scasb,
+      x86Scasw,
+      x86Scasd,
+      x86Lodsb,
+      x86Lodsw,
+      x86Lodsd,
+      x86Movsb,
+      x86Movsw,
+      x86Movsd,
+      x86Stosb,
+      x86Stosw,
+      x86Stosd,
+      x86Sahf,
+      x86Stc,
+      x86Std,
+      x86Sti,
+      x86Xlatb,
+        lastX86Ident = x86Xlatb
   } Token;
 
 /*
@@ -439,7 +455,7 @@
   typedef struct EnumField {
     char*    name;
     size_t   valSize;
-    uint8_t* fieldVal; 
+    uint8_t* fieldVal;
   } EnumField;
 
   typedef struct EnumSym {
@@ -834,12 +850,7 @@
     hasRepz = hasPrefix1,
     hasRepnz = hasPrefix1,
 
-    hasCS = hasPrefix2,
-    hasSS = hasPrefix2,
-    hasDS = hasPrefix2,
-    hasES = hasPrefix2,
-    hasFS = hasPrefix2,
-    hasGS = hasPrefix2,
+    hasSegOverride = hasPrefix2,
     hasBranch = hasPrefix2,
     hasNoBranch = hasPrefix2,
 
@@ -855,12 +866,7 @@
     indexRepz = 0,
     indexRepnz = 0,
 
-    indexCS = 1,
-    indexSS = 1,
-    indexDS = 1,
-    indexES = 1,
-    indexFS = 1,
-    indexGS = 1,
+    indexSegOverride = 1,
     indexBranch = 1,
     indexNoBranch = 1,
 
@@ -922,7 +928,7 @@
     unsigned imm );
 
   bool x86GenOpRegRegReg( FILE* binFile, unsigned mnemonic,
-    unsigned reg1, unsigned reg2, unsigned reg3 );
+    unsigned destReg, unsigned srcReg, unsigned valReg );
 
   bool x86GenOpRegRegImm( FILE* binFile, unsigned mnemonic,
     unsigned destReg, unsigned srcReg, unsigned imm );
@@ -1009,187 +1015,23 @@ int main( int argc, char* argv[] ) {
   FILE* binFile = fopen("out", "wb");
   if( binFile ) {
 ;;;
-    // [base]
-    TestAddr32( binFile, x86RegCL, x86RegEAX,  0, 0, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegEDI,  0, 0, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegESP,  0, 0, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegEBP,  0, 0, 0 );
+    x86Addr addr = {};
+    addr.baseReg = x86RegEAX;
+    addr.indexReg = x86RegEDI;
+    x86GenOpRegMem( binFile, x86Adc, x86RegEBP, x86SRegES, &addr );
 
-    // [disp]
-    TestAddr32( binFile, x86RegCL, 0,  0, 0, 0x11 );
-    TestAddr32( binFile, x86RegBH, 0,  0, 0, 0x11 );
-    TestAddr32( binFile, x86RegCL, 0,  0, 0, 0x11223344 );
-    TestAddr32( binFile, x86RegBH, 0,  0, 0, 0x11223344 );
+    addr.baseReg = x86RegEAX;
+    addr.indexReg = x86RegEDI;
+    x86GenOpRegMem( binFile, x86Adc, x86RegDI, x86SRegDS, &addr );
 
-    // [base + disp]
-    TestAddr32( binFile, x86RegCL, x86RegEAX,  0, 0, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegEDI,  0, 0, 0x11 );
-    TestAddr32( binFile, x86RegCL, x86RegEAX,  0, 0, 0x11223344 );
-    TestAddr32( binFile, x86RegBH, x86RegEDI,  0, 0, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegESP,  0, 0, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegESP,  0, 0, 0x11 );
-    TestAddr32( binFile, x86RegCL, x86RegESP,  0, 0, 0x11223344 );
-    TestAddr32( binFile, x86RegBH, x86RegESP,  0, 0, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegEBP,  0, 0, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegEBP,  0, 0, 0x11 );
-    TestAddr32( binFile, x86RegCL, x86RegEBP,  0, 0, 0x11223344 );
-    TestAddr32( binFile, x86RegBH, x86RegEBP,  0, 0, 0x11223344 );
+    addr.baseReg = x86RegBX;
+    addr.indexReg = x86RegDI;
+    x86GenOpRegMem( binFile, x86Adc, x86RegCL, x86SRegFS, &addr );
 
-    // [index * scale]
-    TestAddr32( binFile, x86RegCL, 0, x86RegEAX,  1, 0 );
-    TestAddr32( binFile, x86RegBH, 0, x86RegEDI,  1, 0 );
-    TestAddr32( binFile, x86RegCL, 0, x86RegEBP,  1, 0 );
-    TestAddr32( binFile, x86RegBH, 0, x86RegEBP,  1, 0 );
-    TestAddr32( binFile, x86RegCL, 0, x86RegEAX,  2, 0 );
-    TestAddr32( binFile, x86RegBH, 0, x86RegEDI,  2, 0 );
-    TestAddr32( binFile, x86RegCL, 0, x86RegEBP,  2, 0 );
-    TestAddr32( binFile, x86RegBH, 0, x86RegEBP,  2, 0 );
-    TestAddr32( binFile, x86RegCL, 0, x86RegEAX,  4, 0 );
-    TestAddr32( binFile, x86RegBH, 0, x86RegEDI,  4, 0 );
-    TestAddr32( binFile, x86RegCL, 0, x86RegEBP,  4, 0 );
-    TestAddr32( binFile, x86RegBH, 0, x86RegEBP,  4, 0 );
-    TestAddr32( binFile, x86RegCL, 0, x86RegEAX,  8, 0 );
-    TestAddr32( binFile, x86RegBH, 0, x86RegEDI,  8, 0 );
-    TestAddr32( binFile, x86RegCL, 0, x86RegEBP,  8, 0 );
-    TestAddr32( binFile, x86RegBH, 0, x86RegEBP,  8, 0 );
+    x86GenOp( binFile, x86Xlatb );
 
-    // [index * scale + disp]
-    TestAddr32( binFile, x86RegCL, 0, x86RegEAX,  1, 0x11223344 );
-    TestAddr32( binFile, x86RegBH, 0, x86RegEDI,  1, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, 0, x86RegEBP,  1, 0x11223344 );
-    TestAddr32( binFile, x86RegBH, 0, x86RegEBP,  1, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, 0, x86RegEAX,  2, 0x11223344 );
-    TestAddr32( binFile, x86RegBH, 0, x86RegEDI,  2, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, 0, x86RegEBP,  2, 0x11223344 );
-    TestAddr32( binFile, x86RegBH, 0, x86RegEBP,  2, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, 0, x86RegEAX,  4, 0x11223344 );
-    TestAddr32( binFile, x86RegBH, 0, x86RegEDI,  4, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, 0, x86RegEBP,  4, 0x11223344 );
-    TestAddr32( binFile, x86RegBH, 0, x86RegEBP,  4, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, 0, x86RegEAX,  8, 0x11223344 );
-    TestAddr32( binFile, x86RegBH, 0, x86RegEDI,  8, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, 0, x86RegEBP,  8, 0x11223344 );
-    TestAddr32( binFile, x86RegBH, 0, x86RegEBP,  8, 0x11223344 );
-
-    // [base + index * scale]
-    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEAX,  1, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEDI,  1, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEAX,  2, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEDI,  2, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEAX,  4, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEDI,  4, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEAX,  8, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEDI,  8, 0 );
-
-    // [base + ebp * scale]
-    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEBP,  1, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEBP,  1, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEBP,  2, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEBP,  2, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEBP,  4, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEBP,  4, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEBP,  8, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEBP,  8, 0 );
-
-    // [esp + index * scale]
-    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEAX,  1, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEDI,  1, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEAX,  2, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEDI,  2, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEAX,  4, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEDI,  4, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEAX,  8, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEDI,  8, 0 );
-
-    // [esp + ebp * scale]
-    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEBP,  1, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEBP,  1, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEBP,  2, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEBP,  2, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEBP,  4, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEBP,  4, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEBP,  8, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEBP,  8, 0 );
-
-    // [ebp + index * scale]
-    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEAX,  1, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEDI,  1, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEAX,  2, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEDI,  2, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEAX,  4, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEDI,  4, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEAX,  8, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEDI,  8, 0 );
-
-    // [ebp + ebp * scale]
-    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEBP,  1, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEBP,  1, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEBP,  2, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEBP,  2, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEBP,  4, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEBP,  4, 0 );
-    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEBP,  8, 0 );
-    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEBP,  8, 0 );
-
-    // [base + index * scale + disp]
-    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEAX,  1, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEDI,  1, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEAX,  2, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEDI,  2, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEAX,  4, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEDI,  4, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEAX,  8, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEDI,  8, 0x11223344 );
-
-    // [base + ebp * scale + disp]
-    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEBP,  1, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEBP,  1, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEBP,  2, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEBP,  2, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEBP,  4, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEBP,  4, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegEAX, x86RegEBP,  8, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegEDI, x86RegEBP,  8, 0x11223344 );
-
-    // [esp + index * scale + disp]
-    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEAX,  1, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEDI,  1, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEAX,  2, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEDI,  2, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEAX,  4, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEDI,  4, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEAX,  8, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEDI,  8, 0x11223344 );
-
-    // [esp + ebp * scale + disp]
-    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEBP,  1, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEBP,  1, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEBP,  2, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEBP,  2, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEBP,  4, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEBP,  4, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegESP, x86RegEBP,  8, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegESP, x86RegEBP,  8, 0x11223344 );
-
-    // [ebp + index * scale + disp]
-    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEAX,  1, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEDI,  1, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEAX,  2, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEDI,  2, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEAX,  4, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEDI,  4, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEAX,  8, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEDI,  8, 0x11223344 );
-
-    // [ebp + ebp * scale + disp]
-    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEBP,  1, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEBP,  1, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEBP,  2, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEBP,  2, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEBP,  4, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEBP,  4, 0x11223344 );
-    TestAddr32( binFile, x86RegCL, x86RegEBP, x86RegEBP,  8, 0x11 );
-    TestAddr32( binFile, x86RegBH, x86RegEBP, x86RegEBP,  8, 0x11223344 );
+    x86GenOpRegRegReg( binFile, x86Shrd,
+      x86RegEAX, x86RegEDI, x86RegCL );
 
     fclose( binFile );
     binFile = NULL;
@@ -2196,26 +2038,10 @@ int main( int argc, char* argv[] ) {
   const size_t formatStart[] = {
     /* x86Call   */ -1,
     /* x86Push   */ -1,
-    /* x86Cbw    */ -1,
-    /* x86Cwd    */ -1,
-    /* x86Clc    */ -1,
-    /* x86Cld    */ -1,
-    /* x86Cli    */ -1,
-    /* x86Cmc    */ -1,
-    /* x86Int3   */ -1,
-    /* x86Iret   */ -1,
-    /* x86Lahf   */ -1,
-    /* x86Nop    */ -1,
     /* x86Popf   */ -1,
     /* x86Pushf  */ -1,
     /* x86Ret    */ -1,
     /* x86Retf   */ -1,
-    /* x86Sahf   */ -1,
-    /* x86Stc    */ -1,
-    /* x86Std    */ -1,
-    /* x86Sti    */ -1,
-    /* x86Xlat   */ -1,
-    /* x86Xlatb  */ -1,
     /* x86Adc    */ 0,
     /* x86Add    */ -1,
     /* x86And    */ -1,
@@ -2243,21 +2069,6 @@ int main( int argc, char* argv[] ) {
     /* x86Jnl    */ -1,
     /* x86Jle    */ -1,
     /* x86Jnle   */ -1,
-    /* x86Rep    */ -1,
-    /* x86Repe   */ -1,
-    /* x86Repne  */ -1,
-    /* x86Repz   */ -1,
-    /* x86Repnz  */ -1,
-    /* x86Lodsb  */ -1,
-    /* x86Lodsw  */ -1,
-    /* x86Movsb  */ -1,
-    /* x86Movsw  */ -1,
-    /* x86Stosb  */ -1,
-    /* x86Stosw  */ -1,
-    /* x86Cmpsb  */ -1,
-    /* x86Cmpsw  */ -1,
-    /* x86Scasb  */ -1,
-    /* x86Scasw  */ -1,
     /* x86Jcxz   */ -1,
     /* x86Jmp    */ -1,
     /* x86Lds    */ -1,
@@ -2282,12 +2093,50 @@ int main( int argc, char* argv[] ) {
     /* x86Sal    */ -1,
     /* x86Sar    */ -1,
     /* x86Shl    */ -1,
+    /* x86Shld   */ -1,
     /* x86Shr    */ -1,
+    /* x86Shrd   */ 11,
     /* x86Sbb    */ -1,
     /* x86Sub    */ -1,
     /* x86Test   */ -1,
     /* x86Xchg   */ -1,
-    /* x86Xor    */ -1
+    /* x86Xor    */ -1,
+    /* x86Cbw    */ -1,
+    /* x86Cdq    */ -1,
+    /* x86Cwd    */ -1,
+    /* x86Clc    */ -1,
+    /* x86Cld    */ -1,
+    /* x86Cli    */ -1,
+    /* x86Cmc    */ -1,
+    /* x86Int3   */ -1,
+    /* x86Iret   */ -1,
+    /* x86Lahf   */ -1,
+    /* x86Nop    */ -1,
+    /* x86Rep    */ -1,
+    /* x86Repe   */ -1,
+    /* x86Repne  */ -1,
+    /* x86Repz   */ -1,
+    /* x86Repnz  */ -1,
+    /* x86Cmpsb  */ -1,
+    /* x86Cmpsw  */ -1,
+    /* x86Cmpsd  */ -1,
+    /* x86Scasb  */ -1,
+    /* x86Scasw  */ -1,
+    /* x86Scasd  */ -1,
+    /* x86Lodsb  */ -1,
+    /* x86Lodsw  */ -1,
+    /* x86Lodsd  */ -1,
+    /* x86Movsb  */ -1,
+    /* x86Movsw  */ -1,
+    /* x86Movsd  */ -1,
+    /* x86Stosb  */ -1,
+    /* x86Stosw  */ -1,
+    /* x86Stosd  */ -1,
+    /* x86Sahf   */ -1,
+    /* x86Stc    */ -1,
+    /* x86Std    */ -1,
+    /* x86Sti    */ -1,
+    /* x86Xlatb  */ 10
   };
   const formatStartCount = sizeof(formatStart) / sizeof(formatStart[0]);
 
@@ -2295,32 +2144,67 @@ int main( int argc, char* argv[] ) {
   // param1.first, param1.last, param2.first, param2.last, param3.first, param3.last,
   // index
   const x86Format formatTable[] = {
-    /* 0 */ x86Adc, x86RegAL, x86RegAL, valUint, valUint32, 0, 0, 0,
-    /* 1 */ x86Adc, x86RegAX, x86RegAX, valUint, valUint32, 0, 0, 1,
-    /* 2 */ x86Adc, x86RegEAX, x86RegEAX, valUint, valUint32, 0, 0, 1,
-    /* 3 */ x86Adc, x86RegAL, x86RegBH, valUint, valUint32, 0, 0, 2,
-    /* 4 */ x86Adc, x86RegAX, x86RegDI, valUint, valUint32, 0, 0, 3,
-    /* 5 */ x86Adc, x86RegEAX, x86RegEDI, valUint, valUint32, 0, 0, 3,
+    /*  0 */ x86Adc, x86RegAL, x86RegAL, firstValUint, lastValUint, 0, 0, 0,
+    /*  1 */ x86Adc, x86RegAX, x86RegAX, firstValUint, lastValUint, 0, 0, 1,
+    /*  2 */ x86Adc, x86RegEAX, x86RegEAX, firstValUint, lastValUint, 0, 0, 1,
+    /*  3 */ x86Adc, firstX86Reg8, lastX86Reg8, firstValUint, lastValUint, 0, 0, 2,
+    /*  4 */ x86Adc, firstX86Reg16, lastX86Reg16, firstValUint, lastValUint, 0, 0, 3,
+    /*  5 */ x86Adc, firstX86Reg32, lastX86Reg32, firstValUint, lastValUint, 0, 0, 3,
+    /*  6 */ x86Adc, firstX86Reg8, lastX86Reg8, firstX86Mem, lastX86Mem, 0, 0, 4,
+    /*  7 */ x86Adc, firstX86Reg16, lastX86Reg16, firstX86Mem, lastX86Mem, 0, 0, 5,
+    /*  8 */ x86Adc, firstX86Reg32, lastX86Reg32, firstX86Mem, lastX86Mem, 0, 0, 5,
+    /*  9 */ x86Adc, firstX86Reg8, lastX86Reg8, firstX86Reg8, lastX86Reg8, 0, 0, 5,
+    /*  9 */ x86Adc, firstX86Reg16, lastX86Reg16, firstX86Reg16, lastX86Reg16, 0, 0, 5,
+    /*  9 */ x86Adc, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, 0, 0, 5,
+    /* 10 */ x86Xlatb, 0, 0, 0, 0, 0, 0, 6,
+    /* 11 */ x86Shrd, firstX86Reg16, lastX86Reg16, firstX86Reg16, lastX86Reg16, valUint8, valUint8, 7,
+    /* 12 */ x86Shrd, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, valUint8, valUint8, 7,
+    /* 13 */ x86Shrd, firstX86Reg16, lastX86Reg16, firstX86Reg16, lastX86Reg16, x86RegCL, x86RegCL, 8,
+    /* 14 */ x86Shrd, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, x86RegCL, x86RegCL, 8,
   };
   const formatCount = sizeof(formatTable) / sizeof(formatTable[0]);
 
   enum x86Transform {
-    xformOpW = 1, // Add operand size prefix
-    xformModReg, // Add register to ModRM bits 0..2
-    xformImm8  // S bit in last opcode if imm in [-128..127]
+    xformOpW = 1, // Add operand size prefix, set op's W bit
+    xformSizeW,   // Add operand size prefix
+    xformModReg,  // Add register to ModRM bits 3..5
+    xformRMReg,   // Add register to ModRM bits 0..2
+    xformImm8     // S bit in last opcode if imm in [-128..127]
   };
 
+;;;
   // fields,
   // prefix1, prefix2, prefix3, prefix4,
   // opcode1, opcode2, opcode3, modRM,
   // xformop, xform1, xform2, xform3
   const x86Encoding encodeTable[] = {
-    /* 0 */ hasOpcode1, 0, 0, 0, 0, 0x14, 0, 0, 0, 0, 0, 0, 0,
-    /* 1 */ hasOpcode1, 0, 0, 0, 0, 0x15, 0, 0, 0, xformOpW, 0, 0, 0,
-    /* 2 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x80, 0, 0, 0xD0, 0, xformModReg, 0, 0,
-    /* 3 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x81, 0, 0, 0xD0, xformOpW, xformModReg, xformImm8, 0
+    // adc encodings
+    /*  0 */ hasOpcode1, 0, 0, 0, 0, 0x14, 0, 0, 0, 0, 0, 0, 0,
+    /*  1 */ hasOpcode1, 0, 0, 0, 0, 0x14, 0, 0, 0, xformOpW, 0, 0, 0,
+    /*  2 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x80, 0, 0, 0xD0, 0, xformModReg, 0, 0,
+    /*  3 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x80, 0, 0, 0xD0, xformOpW, xformModReg, xformImm8, 0,
+    /*  4 */ hasOpcode1, 0, 0, 0, 0, 0x12, 0, 0, 0, 0, xformModReg, 0, 0,
+    /*  5 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x12, 0, 0, 0, xformOpW, xformModReg, 0, 0,
+
+    /*  6 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x12, 0, 0, 0, xformOpW, xformModReg, 0, 0,
+    /*  7 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x12, 0, 0, 0, xformOpW, xformModReg, 0, 0,
+
+    // xlatb encodings
+    /*  8 */ hasOpcode1, 0, 0, 0, 0, 0xD7, 0, 0, 0, 0, 0, 0, 0,
+    // shrd encodings
+    /*  9 */ hasOpcode1, 0, 0, 0, 0, 0x0F, 0xAC, 0, 0, xformSizeW, 0, 0, 0,
+    /* 10 */ hasOpcode1, 0, 0, 0, 0, 0x0F, 0xAD, 0, 0, xformSizeW, 0, 0, 0,
   };
   const encodeCount = sizeof(encodeTable) / sizeof(encodeTable[0]);
+
+  const uint8_t x86SegPrefixes[] = {
+    /* x86SRegES */ 0x26,
+    /* x86SRegCS */ 0x2E,
+    /* x86SRegSS */ 0x36,
+    /* x86SRegDS */ 0x3E,
+    /* x86SRegFS */ 0x64,
+    /* x86SRegGS */ 0x65
+  };
 
   bool x86Emit( FILE* binFile, x86Instruction* instruction ) {
     uint8_t machineCode[sizeof(x86Instruction)];
@@ -2518,7 +2402,6 @@ int main( int argc, char* argv[] ) {
     return true;
   }
 
-;;;
   bool x86EncodeAddr32( x86Instruction* instruction, x86Addr* addr32 ) {
     x86Instruction tempInstruction = {};
     x86Addr tempAddr = {};
@@ -2583,7 +2466,7 @@ int main( int argc, char* argv[] ) {
       if( tempAddr.baseReg == 0 ) {
         tempInstruction.fields |= hasDisp32;
         tempInstruction.modRM &= 0x3F;
-  
+
         tempInstruction.sib = (tempInstruction.sib & (~0x3F)) |
             ((tempAddr.indexReg - firstX86Reg32) << 3) | 0x05;
       } else {
@@ -2617,8 +2500,460 @@ int main( int argc, char* argv[] ) {
     return true;
   }
 
+  bool x86GenOp( FILE* binFile, unsigned mnemonic ) {
+    x86Instruction instruction = {};
+    size_t mnemonicIndex;
+    size_t formatIndex;
+    size_t encodeIndex;
+    x86FormatParam param1;
+    x86FormatParam param2;
+    x86FormatParam param3;
+    bool encodeResult;
+
+    if( !(binFile && mnemonic) ) {
+      return false;
+    }
+
+    mnemonicIndex = mnemonic - firstX86Ident;
+    if( mnemonicIndex > (lastX86Ident - firstX86Ident) ) {
+      return false;
+    }
+
+    formatIndex = formatStart[mnemonicIndex];
+    if( formatIndex > formatCount ) {
+      return false;
+    }
+
+    do {
+      if( formatTable[formatIndex].mnemonic != mnemonic ) {
+        return false;
+      }
+
+      param1 = formatTable[formatIndex].param[0];
+      param2 = formatTable[formatIndex].param[1];
+      param3 = formatTable[formatIndex].param[2];
+
+      if( (param3.first | param3.last |
+            param2.first | param2.last |
+            param1.first | param1.last) == 0 ) {
+        break;
+      }
+
+      formatIndex++;
+    } while( formatIndex < formatCount );
+
+    encodeIndex = formatTable[formatIndex].index;
+    if( encodeIndex >= encodeCount ) {
+      return false;
+    }
+
+    // Initialize instruction structure
+    instruction.fields = encodeTable[encodeIndex].fields;
+
+    instruction.prefix[0] = encodeTable[encodeIndex].prefix[0];
+    instruction.prefix[1] = encodeTable[encodeIndex].prefix[1];
+    instruction.prefix[2] = encodeTable[encodeIndex].prefix[2];
+    instruction.prefix[3] = encodeTable[encodeIndex].prefix[3];
+
+    instruction.opcode[0] = encodeTable[encodeIndex].opcode[0];
+    instruction.opcode[1] = encodeTable[encodeIndex].opcode[1];
+    instruction.opcode[2] = encodeTable[encodeIndex].opcode[2];
+
+    instruction.modRM = encodeTable[encodeIndex].modRM;
+
+    // Unused parameter validation
+    if( encodeTable[encodeIndex].xformOp |
+        encodeTable[encodeIndex].xform[0] |
+        encodeTable[encodeIndex].xform[1] |
+        encodeTable[encodeIndex].xform[2] ) {
+      return false;
+    }
+
+    return x86Emit(binFile, &instruction);
+  }
+
+  bool x86GenRepOp( FILE* binFile, unsigned repMnemonic, unsigned mnemonic ) {
+    return false;
+  }
+
+  bool x86GenOpReg( FILE* binFile, unsigned mnemonic, unsigned reg ) {
+    return false;
+  }
+
+  bool x86GenOpMem( FILE* binFile, unsigned mnemonic,
+    unsigned segOverride, x86Addr* addr ) {
+    return false;
+  }
+
+  bool x86GenOpImm( FILE* binFile, unsigned mnemonic, unsigned imm ) {
+    return false;
+  }
+
+  bool x86GenOpDisp( FILE* binFile, unsigned mnemonic, int disp ) {
+    return false;
+  }
+
+  bool x86GenOpFarDisp( FILE* binFile, unsigned mnemonic,
+    unsigned seg, unsigned offset ) {
+    return false;
+  }
+
+  bool x86GenOpMemRegImm( FILE* binFile, unsigned segOverride, x86Addr* addr,
+    unsigned reg, unsigned imm ) {
+    return false;
+  }
+
+  bool x86GenOpRegMemImm( FILE* binFile, unsigned mnemonic,
+    unsigned destReg, unsigned segOverride, x86Addr* addr,
+    unsigned imm ) {
+    return false;
+  }
+
+;;;
+  bool x86GenOpRegRegReg( FILE* binFile, unsigned mnemonic,
+    unsigned destReg, unsigned srcReg, unsigned valReg ) {
+    return false;
+  }
+
+  bool x86GenOpRegRegImm( FILE* binFile, unsigned mnemonic,
+    unsigned destReg, unsigned srcReg, unsigned imm ) {
+    return false;
+  }
+
   bool x86GenOpRegMem( FILE* binFile, unsigned mnemonic,
       unsigned destReg, unsigned segOverride, x86Addr* addr ) {
+    x86Instruction instruction = {};
+    size_t mnemonicIndex;
+    size_t formatIndex;
+    size_t encodeIndex;
+    x86FormatParam param1;
+    x86FormatParam param2;
+    x86FormatParam param3;
+    unsigned opIndex = 0;
+    unsigned regBits;
+    unsigned segIndex;
+    bool encodeResult;
+    uint8_t opWBit = 0;
+
+    if( !(binFile && mnemonic) ) {
+      return false;
+    }
+
+    mnemonicIndex = mnemonic - firstX86Ident;
+    if( mnemonicIndex > (lastX86Ident - firstX86Ident) ) {
+      return false;
+    }
+
+    formatIndex = formatStart[mnemonicIndex];
+    if( formatIndex > formatCount ) {
+      return false;
+    }
+
+    do {
+      if( formatTable[formatIndex].mnemonic != mnemonic ) {
+        return false;
+      }
+
+      param1 = formatTable[formatIndex].param[0];
+      param2 = formatTable[formatIndex].param[1];
+      param3 = formatTable[formatIndex].param[2];
+
+      if( (param3.first | param3.last) == 0 ) {
+        if( (param2.first >= firstX86Mem) && (lastX86Mem <= param2.last) ) {
+          if( (param1.first <= destReg) && (destReg <= param1.last) ) {
+            break;
+          }
+        }
+      }
+
+      formatIndex++;
+    } while( formatIndex < formatCount );
+
+    encodeIndex = formatTable[formatIndex].index;
+    if( encodeIndex >= encodeCount ) {
+      return false;
+    }
+
+    // Initialize instruction structure
+    instruction.fields = encodeTable[encodeIndex].fields;
+
+    instruction.prefix[0] = encodeTable[encodeIndex].prefix[0];
+    instruction.prefix[1] = encodeTable[encodeIndex].prefix[1];
+    instruction.prefix[2] = encodeTable[encodeIndex].prefix[2];
+    instruction.prefix[3] = encodeTable[encodeIndex].prefix[3];
+
+    instruction.opcode[0] = encodeTable[encodeIndex].opcode[0];
+    instruction.opcode[1] = encodeTable[encodeIndex].opcode[1];
+    instruction.opcode[2] = encodeTable[encodeIndex].opcode[2];
+
+    instruction.modRM = encodeTable[encodeIndex].modRM;
+
+    switch( segOverride & x86OperandMask ) {
+    case 0:
+      break;
+
+    case x86SReg:
+      if( instruction.fields & hasSegOverride ) {
+        return false;
+      }
+
+      segIndex = segOverride - firstX86SReg;
+      if( segIndex > (lastX86SReg - firstX86SReg) ) {
+        return false;
+      }
+
+      instruction.fields |= hasSegOverride;
+      instruction.prefix[indexSegOverride] = x86SegPrefixes[segIndex];
+      break;
+
+    default:
+      return false;
+    }
+
+    encodeResult = false;
+    switch( (addr->baseReg | addr->indexReg) & x86OperandMask ) {
+    case 0:
+      encodeResult = true;
+      break;
+
+    case x86Reg16:
+      encodeResult = x86EncodeAddr16(&instruction, addr);
+      break;
+
+    case x86Reg32:
+      encodeResult = x86EncodeAddr32(&instruction, addr);
+      break;
+    }
+
+    if( !encodeResult ) {
+      return false;
+    }
+
+    // Mnemonic/Opcode transforms
+    switch( encodeTable[encodeIndex].xformOp ) {
+    case 0:
+      break;
+
+    case xformOpW:
+      switch( instruction.fields & (hasOpcode1 | hasOpcode2 | hasOpcode3) ) {
+      case hasOpcode3:
+        opIndex++;
+      case hasOpcode2:
+        opIndex++;
+      case hasOpcode1:
+        opWBit = 0x01;
+      }
+
+    case xformSizeW:
+      regBits = 0;
+      switch( destReg & x86OperandMask ) {
+      case x86Reg16:
+        regBits = 16;
+        instruction.opcode[opIndex] |= opWBit;
+        break;
+      case x86Reg32:
+        regBits = 32;
+        instruction.opcode[opIndex] |= opWBit;
+        break;
+      default:
+        return false;
+      }
+      if( target.bits != regBits ) {
+        instruction.fields |= hasOperandSize;
+        instruction.prefix[indexOperandSize] = target.operandWPrefix;
+      }
+      break;
+
+    default:
+      return false;
+    }
+
+    // Register transforms
+    switch( encodeTable[encodeIndex].xform[0] ) {
+    case 0:
+      break;
+
+    case xformModReg:
+      instruction.modRM |= ((destReg - (destReg & x86OperandMask)) << 3);
+      break;
+
+    default:
+      return false;
+    }
+
+    // Unused parameter validation
+    if( encodeTable[encodeIndex].xform[1] ||
+        encodeTable[encodeIndex].xform[2] ) {
+      return false;
+    }
+
+    return x86Emit(binFile, &instruction);
+  }
+
+  bool x86GenOpMemReg( FILE* binFile, unsigned mnemonic,
+    unsigned segOverride, x86Addr* addr, unsigned srcReg ) {
+    return false;
+  }
+
+  bool x86GenOpRegReg( FILE* binFile,
+    unsigned mnemonic, unsigned destReg, unsigned srcReg ) {
+    x86Instruction instruction = {};
+    size_t mnemonicIndex;
+    size_t formatIndex;
+    size_t encodeIndex;
+    x86FormatParam param1;
+    x86FormatParam param2;
+    x86FormatParam param3;
+    unsigned opIndex = 0;
+    unsigned regBits;
+    uint8_t opWBit = 0;
+
+    if( !(binFile && mnemonic && (mnemonic <= lastX86Ident)) ) {
+      return false;
+    }
+
+    ///TODO: Properly test if mnemonic falls between first and last
+    mnemonicIndex = mnemonic - firstX86Ident;
+    formatIndex = formatStart[mnemonicIndex];
+    if( formatIndex > formatCount ) {
+      return false;
+    }
+
+    do {
+      if( formatTable[formatIndex].mnemonic != mnemonic ) {
+        return false;
+      }
+
+      param1 = formatTable[formatIndex].param[0];
+      param2 = formatTable[formatIndex].param[1];
+      param3 = formatTable[formatIndex].param[2];
+
+      if( (param3.first | param3.last) == 0 ) {
+        if( (param2.first <= srcReg) && (srcReg <= param2.last) ) {
+          if( (param1.first <= destReg) && (destReg <= param1.last) ) {
+            break;
+          }
+        }
+      }
+
+      formatIndex++;
+    } while( formatIndex < formatCount );
+
+    encodeIndex = formatTable[formatIndex].index;
+    if( encodeIndex >= encodeCount ) {
+      return false;
+    }
+
+    // Initialize instruction structure
+    instruction.fields = encodeTable[encodeIndex].fields;
+
+    switch( destReg & x86OperandMask ) {
+    case 0:
+      break;
+
+    case x86Reg8:
+      instruction.fields |= hasImm8;
+      break;
+
+    case x86Reg16:
+      instruction.fields |= hasImm16;
+      break;
+
+    case x86Reg32:
+      instruction.fields |= hasImm32;
+      break;
+
+    default:
+      return false;
+    }
+
+    instruction.prefix[0] = encodeTable[encodeIndex].prefix[0];
+    instruction.prefix[1] = encodeTable[encodeIndex].prefix[1];
+    instruction.prefix[2] = encodeTable[encodeIndex].prefix[2];
+    instruction.prefix[3] = encodeTable[encodeIndex].prefix[3];
+
+    instruction.opcode[0] = encodeTable[encodeIndex].opcode[0];
+    instruction.opcode[1] = encodeTable[encodeIndex].opcode[1];
+    instruction.opcode[2] = encodeTable[encodeIndex].opcode[2];
+
+    instruction.modRM = encodeTable[encodeIndex].modRM;
+
+    // Mnemonic/Opcode transforms
+    switch( encodeTable[encodeIndex].xformOp ) {
+    case 0:
+      break;
+
+    case xformOpW:
+      switch( instruction.fields & (hasOpcode1 | hasOpcode2 | hasOpcode3) ) {
+      case hasOpcode3:
+        opIndex++;
+      case hasOpcode2:
+        opIndex++;
+      case hasOpcode1:
+        opWBit = 0x01;
+      }
+
+    case xformSizeW:
+      regBits = 0;
+      switch( destReg & x86OperandMask ) {
+      case x86Reg16:
+        regBits = 16;
+        instruction.opcode[opIndex] |= opWBit;
+        break;
+      case x86Reg32:
+        regBits = 32;
+        instruction.opcode[opIndex] |= opWBit;
+        break;
+      default:
+        return false;
+      }
+      if( target.bits != regBits ) {
+        instruction.fields |= hasOperandSize;
+        instruction.prefix[indexOperandSize] = target.operandWPrefix;
+      }
+      break;
+
+    default:
+      return false;
+    }
+
+    // Register transforms
+    switch( encodeTable[encodeIndex].xform[0] ) {
+    case 0:
+      break;
+
+    case xformModReg:
+      instruction.modRM |= (destReg - (destReg & x86OperandMask)) << 3;
+      break;
+
+    case xformRMReg:
+      instruction.modRM |= (destReg - (destReg & x86OperandMask));
+      break;
+
+    default:
+      return false;
+    }
+
+    // Immediate transforms
+    opIndex = 0;
+    switch( encodeTable[encodeIndex].xform[1] ) {
+    case 0:
+      break;
+
+    default:
+      return false;
+    }
+
+    // Unused parameter validation
+    if( encodeTable[encodeIndex].xform[2] != 0 ) {
+      return false;
+    }
+
+    return x86Emit(binFile, &instruction);
+  }
+
+  bool x86GenOpMemImm( FILE* binFile,
+    unsigned mnemonic, unsigned segOverride, x86Addr* addr32, unsigned imm ) {
     return false;
   }
 
@@ -2630,13 +2965,15 @@ int main( int argc, char* argv[] ) {
     x86FormatParam param1;
     x86FormatParam param2;
     x86FormatParam param3;
-    unsigned opIndex;
+    unsigned opIndex = 0;
     unsigned regBits;
+    uint8_t opWBit = 0;
 
     if( !(binFile && mnemonic && (mnemonic <= lastX86Ident)) ) {
       return false;
     }
 
+    ///TODO: Properly test if mnemonic falls between first and last
     mnemonicIndex = mnemonic - firstX86Ident;
     formatIndex = formatStart[mnemonicIndex];
     if( formatIndex > formatCount ) {
@@ -2705,19 +3042,30 @@ int main( int argc, char* argv[] ) {
     instruction.immediate = imm;
 
     // Mnemonic/Opcode transforms
-    opIndex = 0;
     switch( encodeTable[encodeIndex].xformOp ) {
     case 0:
       break;
 
     case xformOpW:
+      switch( instruction.fields & (hasOpcode1 | hasOpcode2 | hasOpcode3) ) {
+      case hasOpcode3:
+        opIndex++;
+      case hasOpcode2:
+        opIndex++;
+      case hasOpcode1:
+        opWBit = 0x01;
+      }
+
+    case xformSizeW:
       regBits = 0;
       switch( reg & x86OperandMask ) {
       case x86Reg16:
         regBits = 16;
+        instruction.opcode[opIndex] |= opWBit;
         break;
       case x86Reg32:
         regBits = 32;
+        instruction.opcode[opIndex] |= opWBit;
         break;
       default:
         return false;
@@ -2738,7 +3086,7 @@ int main( int argc, char* argv[] ) {
       break;
 
     case xformModReg:
-      instruction.modRM |= (reg - (reg & x86OperandMask));
+      instruction.modRM |= (reg - (reg & x86OperandMask)) << 3;
       break;
 
     default:
