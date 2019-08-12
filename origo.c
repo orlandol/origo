@@ -845,6 +845,7 @@
 
   enum PrefixFlags {
     hasLock = hasPrefix1,
+    hasRep = hasPrefix1,
     hasRepe = hasPrefix1,
     hasRepne = hasPrefix1,
     hasRepz = hasPrefix1,
@@ -861,6 +862,7 @@
 
   enum PrefixIndices {
     indexLock = 0,
+    indexRep = 0,
     indexRepe = 0,
     indexRepne = 0,
     indexRepz = 0,
@@ -927,8 +929,8 @@
     unsigned destReg, unsigned segOverride, x86Addr* addr,
     unsigned imm );
 
-  bool x86GenOpRegRegReg( FILE* binFile, unsigned mnemonic,
-    unsigned destReg, unsigned srcReg, unsigned valReg );
+  bool x86GenOpRegRegCL( FILE* binFile, unsigned mnemonic,
+    unsigned destReg, unsigned srcReg );
 
   bool x86GenOpRegRegImm( FILE* binFile, unsigned mnemonic,
     unsigned destReg, unsigned srcReg, unsigned imm );
@@ -941,6 +943,8 @@
 
   bool x86GenOpRegReg( FILE* binFile,
     unsigned mnemonic, unsigned destReg, unsigned srcReg );
+
+  bool x86GenOpRegCL( FILE* binFile, unsigned mnemonic, unsigned destReg );
 
   bool x86GenOpMemImm( FILE* binFile,
     unsigned mnemonic, unsigned segOverride, x86Addr* addr32, unsigned imm );
@@ -1028,10 +1032,20 @@ int main( int argc, char* argv[] ) {
     addr.indexReg = x86RegDI;
     x86GenOpRegMem( binFile, x86Adc, x86RegCL, x86SRegFS, &addr );
 
+    x86GenOpRegImm( binFile, x86Adc, x86RegCL, 0x11 );
+    x86GenOpRegImm( binFile, x86Adc, x86RegCL, -100 );
+    x86GenOpRegImm( binFile, x86Adc, x86RegCX, 0x1122 );
+    x86GenOpRegImm( binFile, x86Adc, x86RegDI, -100 );
+    x86GenOpRegImm( binFile, x86Adc, x86RegECX, 0x11223344 );
+    x86GenOpRegImm( binFile, x86Adc, x86RegEDI, -100 );
+
     x86GenOp( binFile, x86Xlatb );
 
-    x86GenOpRegRegReg( binFile, x86Shrd,
-      x86RegEAX, x86RegEDI, x86RegCL );
+    x86GenOpRegRegCL( binFile, x86Shrd, x86RegECX, x86RegEDI );
+
+    x86GenOpRegReg( binFile, x86Add, x86RegCL, x86RegBH );
+    x86GenOpRegReg( binFile, x86Add, x86RegCX, x86RegDI );
+    x86GenOpRegReg( binFile, x86Add, x86RegECX, x86RegEDI );
 
     fclose( binFile );
     binFile = NULL;
@@ -2043,7 +2057,7 @@ int main( int argc, char* argv[] ) {
     /* x86Ret    */ -1,
     /* x86Retf   */ -1,
     /* x86Adc    */ 0,
-    /* x86Add    */ -1,
+    /* x86Add    */ 12,
     /* x86And    */ -1,
     /* x86Cmp    */ -1,
     /* x86Dec    */ -1,
@@ -2095,7 +2109,7 @@ int main( int argc, char* argv[] ) {
     /* x86Shl    */ -1,
     /* x86Shld   */ -1,
     /* x86Shr    */ -1,
-    /* x86Shrd   */ 11,
+    /* x86Shrd   */ 16,
     /* x86Sbb    */ -1,
     /* x86Sub    */ -1,
     /* x86Test   */ -1,
@@ -2136,7 +2150,7 @@ int main( int argc, char* argv[] ) {
     /* x86Stc    */ -1,
     /* x86Std    */ -1,
     /* x86Sti    */ -1,
-    /* x86Xlatb  */ 10
+    /* x86Xlatb  */ 15
   };
   const formatStartCount = sizeof(formatStart) / sizeof(formatStart[0]);
 
@@ -2153,14 +2167,20 @@ int main( int argc, char* argv[] ) {
     /*  6 */ x86Adc, firstX86Reg8, lastX86Reg8, firstX86Mem, lastX86Mem, 0, 0, 4,
     /*  7 */ x86Adc, firstX86Reg16, lastX86Reg16, firstX86Mem, lastX86Mem, 0, 0, 5,
     /*  8 */ x86Adc, firstX86Reg32, lastX86Reg32, firstX86Mem, lastX86Mem, 0, 0, 5,
-    /*  9 */ x86Adc, firstX86Reg8, lastX86Reg8, firstX86Reg8, lastX86Reg8, 0, 0, 5,
-    /*  9 */ x86Adc, firstX86Reg16, lastX86Reg16, firstX86Reg16, lastX86Reg16, 0, 0, 5,
-    /*  9 */ x86Adc, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, 0, 0, 5,
-    /* 10 */ x86Xlatb, 0, 0, 0, 0, 0, 0, 6,
-    /* 11 */ x86Shrd, firstX86Reg16, lastX86Reg16, firstX86Reg16, lastX86Reg16, valUint8, valUint8, 7,
-    /* 12 */ x86Shrd, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, valUint8, valUint8, 7,
-    /* 13 */ x86Shrd, firstX86Reg16, lastX86Reg16, firstX86Reg16, lastX86Reg16, x86RegCL, x86RegCL, 8,
-    /* 14 */ x86Shrd, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, x86RegCL, x86RegCL, 8,
+    /*  9 */ x86Adc, firstX86Reg8, lastX86Reg8, firstX86Reg8, lastX86Reg8, 0, 0, 6,
+    /* 10 */ x86Adc, firstX86Reg16, lastX86Reg16, firstX86Reg16, lastX86Reg16, 0, 0, 7,
+    /* 11 */ x86Adc, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, 0, 0, 7,
+
+    /* 12 */ x86Add, firstX86Reg8, lastX86Reg8, firstX86Reg8, lastX86Reg8, 0, 0, 8,
+    /* 13 */ x86Add, firstX86Reg16, lastX86Reg16, firstX86Reg16, lastX86Reg16, 0, 0, 9,
+    /* 14 */ x86Add, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, 0, 0, 9,
+
+    /* 15 */ x86Xlatb, 0, 0, 0, 0, 0, 0, 10,
+
+    /* 16 */ x86Shrd, firstX86Reg16, lastX86Reg16, firstX86Reg16, lastX86Reg16, valUint8, valUint8, 11,
+    /* 17 */ x86Shrd, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, valUint8, valUint8, 11,
+    /* 18 */ x86Shrd, firstX86Reg16, lastX86Reg16, firstX86Reg16, lastX86Reg16, x86RegCL, x86RegCL, 12,
+    /* 19 */ x86Shrd, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, x86RegCL, x86RegCL, 12,
   };
   const formatCount = sizeof(formatTable) / sizeof(formatTable[0]);
 
@@ -2172,7 +2192,6 @@ int main( int argc, char* argv[] ) {
     xformImm8     // S bit in last opcode if imm in [-128..127]
   };
 
-;;;
   // fields,
   // prefix1, prefix2, prefix3, prefix4,
   // opcode1, opcode2, opcode3, modRM,
@@ -2181,19 +2200,23 @@ int main( int argc, char* argv[] ) {
     // adc encodings
     /*  0 */ hasOpcode1, 0, 0, 0, 0, 0x14, 0, 0, 0, 0, 0, 0, 0,
     /*  1 */ hasOpcode1, 0, 0, 0, 0, 0x14, 0, 0, 0, xformOpW, 0, 0, 0,
-    /*  2 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x80, 0, 0, 0xD0, 0, xformModReg, 0, 0,
-    /*  3 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x80, 0, 0, 0xD0, xformOpW, xformModReg, xformImm8, 0,
+    /*  2 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x80, 0, 0, 0xD0, 0, xformRMReg, 0, 0,
+    /*  3 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x80, 0, 0, 0xD0, xformOpW, xformRMReg, xformImm8, 0,
     /*  4 */ hasOpcode1, 0, 0, 0, 0, 0x12, 0, 0, 0, 0, xformModReg, 0, 0,
     /*  5 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x12, 0, 0, 0, xformOpW, xformModReg, 0, 0,
+    /*  6 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x10, 0, 0, 0xC0, 0, xformRMReg, xformModReg, 0,
+    /*  7 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x10, 0, 0, 0xC0, xformOpW, xformRMReg, xformModReg, 0,
 
-    /*  6 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x12, 0, 0, 0, xformOpW, xformModReg, 0, 0,
-    /*  7 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x12, 0, 0, 0, xformOpW, xformModReg, 0, 0,
+    // add encodings
+    /*  8 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x00, 0, 0, 0xC0, 0, xformRMReg, xformModReg, 0,
+    /*  9 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x00, 0, 0, 0xC0, xformOpW, xformRMReg, xformModReg, 0,
 
     // xlatb encodings
-    /*  8 */ hasOpcode1, 0, 0, 0, 0, 0xD7, 0, 0, 0, 0, 0, 0, 0,
+    /* 10 */ hasOpcode1, 0, 0, 0, 0, 0xD7, 0, 0, 0, 0, 0, 0, 0,
+
     // shrd encodings
-    /*  9 */ hasOpcode1, 0, 0, 0, 0, 0x0F, 0xAC, 0, 0, xformSizeW, 0, 0, 0,
-    /* 10 */ hasOpcode1, 0, 0, 0, 0, 0x0F, 0xAD, 0, 0, xformSizeW, 0, 0, 0,
+    /* 11 */ hasOpcode1 | hasOpcode2 | hasModRM, 0, 0, 0, 0, 0x0F, 0xAC, 0, 0xC0, xformSizeW, xformRMReg, xformModReg, 0,
+    /* 12 */ hasOpcode1 | hasOpcode2 | hasModRM, 0, 0, 0, 0, 0x0F, 0xAD, 0, 0xC0, xformSizeW, xformRMReg, xformModReg, 0,
   };
   const encodeCount = sizeof(encodeTable) / sizeof(encodeTable[0]);
 
@@ -2573,7 +2596,28 @@ int main( int argc, char* argv[] ) {
   }
 
   bool x86GenRepOp( FILE* binFile, unsigned repMnemonic, unsigned mnemonic ) {
-    return false;
+    x86Instruction instruction = {};
+
+    switch( repMnemonic ) {
+    case x86Rep:
+    case x86Repe:
+    case x86Repz:
+      instruction.fields |= hasRep;
+      instruction.prefix[indexRep] = 0xF3;
+      break;
+
+    default:
+      return false;
+    }
+
+    switch( mnemonic ) {
+    case x86Cbw:
+    case x86Cdq:
+    default:
+      return false;
+    }
+
+    return x86Emit(binFile, &instruction);
   }
 
   bool x86GenOpReg( FILE* binFile, unsigned mnemonic, unsigned reg ) {
@@ -2609,10 +2653,151 @@ int main( int argc, char* argv[] ) {
     return false;
   }
 
-;;;
-  bool x86GenOpRegRegReg( FILE* binFile, unsigned mnemonic,
-    unsigned destReg, unsigned srcReg, unsigned valReg ) {
-    return false;
+  bool x86GenOpRegRegCL( FILE* binFile, unsigned mnemonic, 
+      unsigned destReg, unsigned srcReg ) {
+    x86Instruction instruction = {};
+    size_t mnemonicIndex;
+    size_t formatIndex;
+    size_t encodeIndex;
+    x86FormatParam param1;
+    x86FormatParam param2;
+    x86FormatParam param3;
+    unsigned opIndex = 0;
+    unsigned regBits;
+    uint8_t  opWBit = 0;
+
+    if( !(binFile && mnemonic) ) {
+      return false;
+    }
+
+    mnemonicIndex = mnemonic - firstX86Ident;
+    if( mnemonicIndex > (lastX86Ident - firstX86Ident) ) {
+      return false;
+    }
+
+    formatIndex = formatStart[mnemonicIndex];
+    if( formatIndex > formatCount ) {
+      return false;
+    }
+
+    do {
+      if( formatTable[formatIndex].mnemonic != mnemonic ) {
+        return false;
+      }
+
+      param1 = formatTable[formatIndex].param[0];
+      param2 = formatTable[formatIndex].param[1];
+      param3 = formatTable[formatIndex].param[2];
+
+      if( (param3.first == x86RegCL) && (param3.last == x86RegCL) ) {
+        if( (param2.first <= srcReg) && (srcReg <= param2.last) ) {
+          if( (param1.first <= destReg) && (destReg <= param1.last) ) {
+            break;
+          }
+        }
+      }
+
+      formatIndex++;
+    } while( formatIndex < formatCount );
+
+    encodeIndex = formatTable[formatIndex].index;
+    if( encodeIndex >= encodeCount ) {
+      return false;
+    }
+
+    // Initialize instruction structure
+    instruction.fields = encodeTable[encodeIndex].fields;
+
+    instruction.prefix[0] = encodeTable[encodeIndex].prefix[0];
+    instruction.prefix[1] = encodeTable[encodeIndex].prefix[1];
+    instruction.prefix[2] = encodeTable[encodeIndex].prefix[2];
+    instruction.prefix[3] = encodeTable[encodeIndex].prefix[3];
+
+    instruction.opcode[0] = encodeTable[encodeIndex].opcode[0];
+    instruction.opcode[1] = encodeTable[encodeIndex].opcode[1];
+    instruction.opcode[2] = encodeTable[encodeIndex].opcode[2];
+
+    instruction.modRM = encodeTable[encodeIndex].modRM;
+
+    switch( instruction.fields & (hasOpcode1 | hasOpcode2 | hasOpcode3) ) {
+    case hasOpcode3:
+      opIndex++;
+    case hasOpcode2:
+      opIndex++;
+    }
+
+    // Mnemonic/Opcode transforms
+    switch( encodeTable[encodeIndex].xformOp ) {
+    case 0:
+      break;
+
+    case xformOpW:
+      opWBit = 0x01;
+
+    case xformSizeW:
+      regBits = 0;
+      switch( destReg & x86OperandMask ) {
+      case x86Reg16:
+        regBits = 16;
+        instruction.opcode[opIndex] |= opWBit;
+        break;
+      case x86Reg32:
+        regBits = 32;
+        instruction.opcode[opIndex] |= opWBit;
+        break;
+      default:
+        return false;
+      }
+      if( target.bits != regBits ) {
+        instruction.fields |= hasOperandSize;
+        instruction.prefix[indexOperandSize] = target.operandWPrefix;
+      }
+      break;
+
+    default:
+      return false;
+    }
+
+    // Destination register transforms
+    switch( encodeTable[encodeIndex].xform[0] ) {
+    case 0:
+      break;
+
+    case xformModReg:
+      instruction.modRM |= (destReg - (destReg & x86OperandMask)) << 3;
+      break;
+
+    case xformRMReg:
+      instruction.modRM |= (destReg - (destReg & x86OperandMask));
+      break;
+
+    default:
+      return false;
+    }
+
+    // Source register transforms
+    switch( encodeTable[encodeIndex].xform[1] ) {
+    case 0:
+      break;
+
+    case xformModReg:
+      instruction.modRM |= (srcReg - (srcReg & x86OperandMask)) << 3;
+      break;
+
+    case xformRMReg:
+      instruction.modRM |= (srcReg - (srcReg & x86OperandMask));
+      break;
+
+    default:
+      return false;
+    }
+
+    // Unused parameter validation
+    if( encodeTable[encodeIndex].xform[2] ) {
+      return false;
+    }
+
+    return x86Emit(binFile, &instruction);
   }
 
   bool x86GenOpRegRegImm( FILE* binFile, unsigned mnemonic,
@@ -2688,6 +2873,13 @@ int main( int argc, char* argv[] ) {
 
     instruction.modRM = encodeTable[encodeIndex].modRM;
 
+    switch( instruction.fields & (hasOpcode1 | hasOpcode2 | hasOpcode3) ) {
+    case hasOpcode3:
+      opIndex++;
+    case hasOpcode2:
+      opIndex++;
+    }
+
     switch( segOverride & x86OperandMask ) {
     case 0:
       break;
@@ -2735,14 +2927,7 @@ int main( int argc, char* argv[] ) {
       break;
 
     case xformOpW:
-      switch( instruction.fields & (hasOpcode1 | hasOpcode2 | hasOpcode3) ) {
-      case hasOpcode3:
-        opIndex++;
-      case hasOpcode2:
-        opIndex++;
-      case hasOpcode1:
-        opWBit = 0x01;
-      }
+      opWBit = 0x01;
 
     case xformSizeW:
       regBits = 0;
@@ -2808,12 +2993,15 @@ int main( int argc, char* argv[] ) {
     unsigned regBits;
     uint8_t opWBit = 0;
 
-    if( !(binFile && mnemonic && (mnemonic <= lastX86Ident)) ) {
+    if( !(binFile && mnemonic) ) {
       return false;
     }
 
-    ///TODO: Properly test if mnemonic falls between first and last
     mnemonicIndex = mnemonic - firstX86Ident;
+    if( mnemonicIndex > (lastX86Ident - firstX86Ident) ) {
+      return false;
+    }
+
     formatIndex = formatStart[mnemonicIndex];
     if( formatIndex > formatCount ) {
       return false;
@@ -2830,6 +3018,161 @@ int main( int argc, char* argv[] ) {
 
       if( (param3.first | param3.last) == 0 ) {
         if( (param2.first <= srcReg) && (srcReg <= param2.last) ) {
+          if( (param1.first <= destReg) && (destReg <= param1.last) ) {
+            break;
+          }
+        }
+      }
+
+      formatIndex++;
+    } while( formatIndex < formatCount );
+
+    encodeIndex = formatTable[formatIndex].index;
+    if( encodeIndex >= encodeCount ) {
+      return false;
+    }
+
+    // Initialize instruction structure
+    instruction.fields = encodeTable[encodeIndex].fields;
+
+    instruction.prefix[0] = encodeTable[encodeIndex].prefix[0];
+    instruction.prefix[1] = encodeTable[encodeIndex].prefix[1];
+    instruction.prefix[2] = encodeTable[encodeIndex].prefix[2];
+    instruction.prefix[3] = encodeTable[encodeIndex].prefix[3];
+
+    instruction.opcode[0] = encodeTable[encodeIndex].opcode[0];
+    instruction.opcode[1] = encodeTable[encodeIndex].opcode[1];
+    instruction.opcode[2] = encodeTable[encodeIndex].opcode[2];
+
+    instruction.modRM = encodeTable[encodeIndex].modRM;
+
+    switch( instruction.fields & (hasOpcode1 | hasOpcode2 | hasOpcode3) ) {
+    case hasOpcode3:
+      opIndex++;
+    case hasOpcode2:
+      opIndex++;
+    }
+
+    // Mnemonic/Opcode transforms
+    switch( encodeTable[encodeIndex].xformOp ) {
+    case 0:
+      break;
+
+    case xformOpW:
+      opWBit = 0x01;
+
+    case xformSizeW:
+      regBits = 0;
+      switch( destReg & x86OperandMask ) {
+      case x86Reg16:
+        regBits = 16;
+        instruction.opcode[opIndex] |= opWBit;
+        break;
+      case x86Reg32:
+        regBits = 32;
+        instruction.opcode[opIndex] |= opWBit;
+        break;
+      default:
+        return false;
+      }
+      if( target.bits != regBits ) {
+        instruction.fields |= hasOperandSize;
+        instruction.prefix[indexOperandSize] = target.operandWPrefix;
+      }
+      break;
+
+    default:
+      return false;
+    }
+
+    // Destination register transforms
+    switch( encodeTable[encodeIndex].xform[0] ) {
+    case 0:
+      break;
+
+    case xformModReg:
+      instruction.modRM |= (destReg - (destReg & x86OperandMask)) << 3;
+      break;
+
+    case xformRMReg:
+      instruction.modRM |= (destReg - (destReg & x86OperandMask));
+      break;
+
+    default:
+      return false;
+    }
+
+    // Source register transforms
+    switch( encodeTable[encodeIndex].xform[1] ) {
+    case 0:
+      break;
+
+    case xformModReg:
+      instruction.modRM |= (srcReg - (srcReg & x86OperandMask)) << 3;
+      break;
+
+    case xformRMReg:
+      instruction.modRM |= (srcReg - (srcReg & x86OperandMask));
+      break;
+
+    default:
+      return false;
+    }
+
+    // Unused parameter validation
+    if( encodeTable[encodeIndex].xform[2] ) {
+      return false;
+    }
+
+    return x86Emit(binFile, &instruction);
+  }
+
+  bool x86GenOpRegCL( FILE* binFile, unsigned mnemonic, unsigned destReg ) {
+    return false;
+  }
+
+  bool x86GenOpMemImm( FILE* binFile,
+    unsigned mnemonic, unsigned segOverride, x86Addr* addr32, unsigned imm ) {
+    return false;
+  }
+
+  bool x86GenOpRegImm( FILE* binFile, unsigned mnemonic, unsigned destReg, unsigned imm ) {
+    x86Instruction instruction = {};
+    size_t mnemonicIndex;
+    size_t formatIndex;
+    size_t encodeIndex;
+    x86FormatParam param1;
+    x86FormatParam param2;
+    x86FormatParam param3;
+    unsigned opIndex = 0;
+    unsigned regBits;
+    uint8_t opWBit = 0;
+
+    if( !(binFile && mnemonic) ) {
+      return false;
+    }
+
+    mnemonicIndex = mnemonic - firstX86Ident;
+    if( mnemonicIndex > (lastX86Ident - firstX86Ident) ) {
+      return false;
+    }
+
+    formatIndex = formatStart[mnemonicIndex];
+    if( formatIndex > formatCount ) {
+      return false;
+    }
+
+    do {
+      if( formatTable[formatIndex].mnemonic != mnemonic ) {
+        return false;
+      }
+
+      param1 = formatTable[formatIndex].param[0];
+      param2 = formatTable[formatIndex].param[1];
+      param3 = formatTable[formatIndex].param[2];
+
+      if( (param3.first | param3.last) == 0 ) {
+        if( (param2.first <= firstValUint) && (lastValUint <= param2.last) ) {
           if( (param1.first <= destReg) && (destReg <= param1.last) ) {
             break;
           }
@@ -2878,20 +3221,22 @@ int main( int argc, char* argv[] ) {
 
     instruction.modRM = encodeTable[encodeIndex].modRM;
 
+    instruction.immediate = imm;
+
+    switch( instruction.fields & (hasOpcode1 | hasOpcode2 | hasOpcode3) ) {
+    case hasOpcode3:
+      opIndex++;
+    case hasOpcode2:
+      opIndex++;
+    }
+
     // Mnemonic/Opcode transforms
     switch( encodeTable[encodeIndex].xformOp ) {
     case 0:
       break;
 
     case xformOpW:
-      switch( instruction.fields & (hasOpcode1 | hasOpcode2 | hasOpcode3) ) {
-      case hasOpcode3:
-        opIndex++;
-      case hasOpcode2:
-        opIndex++;
-      case hasOpcode1:
-        opWBit = 0x01;
-      }
+      opWBit = 0x01;
 
     case xformSizeW:
       regBits = 0;
@@ -2935,181 +3280,19 @@ int main( int argc, char* argv[] ) {
     }
 
     // Immediate transforms
-    opIndex = 0;
-    switch( encodeTable[encodeIndex].xform[1] ) {
-    case 0:
-      break;
-
-    default:
-      return false;
-    }
-
-    // Unused parameter validation
-    if( encodeTable[encodeIndex].xform[2] != 0 ) {
-      return false;
-    }
-
-    return x86Emit(binFile, &instruction);
-  }
-
-  bool x86GenOpMemImm( FILE* binFile,
-    unsigned mnemonic, unsigned segOverride, x86Addr* addr32, unsigned imm ) {
-    return false;
-  }
-
-  bool x86GenOpRegImm( FILE* binFile, unsigned mnemonic, unsigned reg, unsigned imm ) {
-    x86Instruction instruction = {};
-    size_t mnemonicIndex;
-    size_t formatIndex;
-    size_t encodeIndex;
-    x86FormatParam param1;
-    x86FormatParam param2;
-    x86FormatParam param3;
-    unsigned opIndex = 0;
-    unsigned regBits;
-    uint8_t opWBit = 0;
-
-    if( !(binFile && mnemonic && (mnemonic <= lastX86Ident)) ) {
-      return false;
-    }
-
-    ///TODO: Properly test if mnemonic falls between first and last
-    mnemonicIndex = mnemonic - firstX86Ident;
-    formatIndex = formatStart[mnemonicIndex];
-    if( formatIndex > formatCount ) {
-      return false;
-    }
-
-    do {
-      if( formatTable[formatIndex].mnemonic != mnemonic ) {
-        return false;
-      }
-
-      param1 = formatTable[formatIndex].param[0];
-      param2 = formatTable[formatIndex].param[1];
-      param3 = formatTable[formatIndex].param[2];
-
-      if( (param3.first | param3.last) == 0 ) {
-        if( (param2.first <= valUint) && (valUint32 <= param2.last) ) {
-          if( (param1.first <= reg) && (reg <= param1.last) ) {
-            break;
-          }
-        }
-      }
-
-      formatIndex++;
-    } while( formatIndex < formatCount );
-
-    encodeIndex = formatTable[formatIndex].index;
-    if( encodeIndex >= encodeCount ) {
-      return false;
-    }
-
-    // Initialize instruction structure
-    instruction.fields = encodeTable[encodeIndex].fields;
-
-    switch( reg & x86OperandMask ) {
-    case 0:
-      break;
-
-    case x86Reg8:
-      instruction.fields |= hasImm8;
-      break;
-
-    case x86Reg16:
-      instruction.fields |= hasImm16;
-      break;
-
-    case x86Reg32:
-      instruction.fields |= hasImm32;
-      break;
-
-    default:
-      return false;
-    }
-
-    instruction.prefix[0] = encodeTable[encodeIndex].prefix[0];
-    instruction.prefix[1] = encodeTable[encodeIndex].prefix[1];
-    instruction.prefix[2] = encodeTable[encodeIndex].prefix[2];
-    instruction.prefix[3] = encodeTable[encodeIndex].prefix[3];
-
-    instruction.opcode[0] = encodeTable[encodeIndex].opcode[0];
-    instruction.opcode[1] = encodeTable[encodeIndex].opcode[1];
-    instruction.opcode[2] = encodeTable[encodeIndex].opcode[2];
-
-    instruction.modRM = encodeTable[encodeIndex].modRM;
-
-    instruction.immediate = imm;
-
-    // Mnemonic/Opcode transforms
-    switch( encodeTable[encodeIndex].xformOp ) {
-    case 0:
-      break;
-
-    case xformOpW:
-      switch( instruction.fields & (hasOpcode1 | hasOpcode2 | hasOpcode3) ) {
-      case hasOpcode3:
-        opIndex++;
-      case hasOpcode2:
-        opIndex++;
-      case hasOpcode1:
-        opWBit = 0x01;
-      }
-
-    case xformSizeW:
-      regBits = 0;
-      switch( reg & x86OperandMask ) {
-      case x86Reg16:
-        regBits = 16;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      case x86Reg32:
-        regBits = 32;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      default:
-        return false;
-      }
-      if( target.bits != regBits ) {
-        instruction.fields |= hasOperandSize;
-        instruction.prefix[indexOperandSize] = target.operandWPrefix;
-      }
-      break;
-
-    default:
-      return false;
-    }
-
-    // Register transforms
-    switch( encodeTable[encodeIndex].xform[0] ) {
-    case 0:
-      break;
-
-    case xformModReg:
-      instruction.modRM |= (reg - (reg & x86OperandMask)) << 3;
-      break;
-
-    default:
-      return false;
-    }
-
-    // Immediate transforms
-    opIndex = 0;
     switch( encodeTable[encodeIndex].xform[1] ) {
     case 0:
       break;
 
     case xformImm8:
-      if( instruction.fields & hasOpcode3 ) {
-        opIndex++;
-      }
-      if( instruction.fields & hasOpcode2 ) {
-        opIndex++;
-      }
-      if( (imm & 0xFFFFFF00) == 0xFFFFFF00 ) {
-        instruction.fields &= (~hasImm32);
-        instruction.fields |= hasImm8;
-        instruction.opcode[opIndex] |= (1 << 1);
+      switch( destReg & x86OperandMask ) {
+      case x86Reg16:
+      case x86Reg32:
+        if( (imm & 0xFFFFFF00) == 0xFFFFFF00 ) {
+          instruction.fields &= (~hasImm32);
+          instruction.fields |= hasImm8;
+          instruction.opcode[opIndex] |= (1 << 1);
+        }
       }
       break;
 
