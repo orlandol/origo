@@ -122,12 +122,19 @@ program Retineo
 /*
  *  Base file object
  */
-  object File
+  object file
   end
 
-  abstract File
+  abstract file
     method ufsize read( @dest, ufsize size )
     method ufsize write( @source, ufsize size )
+
+    method ufsize pos()
+    method bool seek( ufsize to )
+    method bool seekby( ifsize amount )
+
+    method ufsize size()
+    method bool seteof()
   end
 
 /*
@@ -137,25 +144,50 @@ program Retineo
     HANDLE handle
   end
 
-  interface DiskFile
-  end
-
   interface DiskFileRead implements DiskFile
-    bool Open( string fileName )
+    bool open( string fileName )
 
     method ufsize read( @dest, ufsize size )
   end
 
   interface DiskFileWrite implements DiskFile
-    bool Create( string fileName )
-    bool Modify( string fileName )
+    bool create( string fileName )
+    bool modify( string fileName )
 
     method ufsize write( @source, ufsize size )
+    method bool seteof()
+  end
+
+  interface DiskFile inherits DiskFileRead, DiskFileWrite
+    method ufsize pos()
+    method bool seek( ufsize to )
+    method bool seekby( ifsize amount )
+
+    method ufsize size()
+  end
+
+/*
+ *  Tokenizer
+ */
+
+  enum uint Token
+  end
+
+  object RetFile
+  end
+
+  interface RetFile
   end
 
 /*
  * Code generator
  */
+
+/*
+ * WinPE output
+ */
+
+  const uint8[] defaultDosStub = incbin("dosstub")
 
 run
 end

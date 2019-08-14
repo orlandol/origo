@@ -169,11 +169,11 @@
 
       // x86 memory address
       x86Mem  = (x86Operand + (0 << 4) + 0),
-        firstX86Mem = x86Mem,
+          firstX86Mem = x86Mem,
         x86Mem8,
         x86Mem16,
         x86Mem32,
-        lastX86Mem = x86Mem,
+          lastX86Mem = x86Mem,
 
       // x86 segment/selector register tokens
       x86SReg = (x86Operand + (1 << 4) + 0),
@@ -225,7 +225,8 @@
         x86RegEDI,
           lastX86Reg32 = x86RegEDI,
 
-      // x86 mnemonic tokens
+    // x86 mnemonic tokens
+    ///TODO: Rename x86Ident to x86Mnemonic
     x86Ident = (6 << 9),
       x86Call,
         firstX86Ident = x86Call,
@@ -345,7 +346,15 @@
       x86Std,
       x86Sti,
       x86Xlatb,
-        lastX86Ident = x86Xlatb
+        lastX86Ident = x86Xlatb,
+
+    // x86 general keywords
+    x86Keyword = (7 << 9),
+        firstx86Keyword = x86Keyword,
+      x86Short,
+      x86Near,
+      x86Far,
+        lastx86Keyword = x86Far,
   } Token;
 
 /*
@@ -920,10 +929,10 @@
     unsigned memType, unsigned segOverride, x86Addr* addr );
   bool x86GenOpImm( FILE* binFile, unsigned mnemonic, unsigned immType, unsigned imm );
 
-  bool x86GenOpDisp( FILE* binFile, unsigned mnemonic, int disp );
+  bool x86GenOpDisp( FILE* binFile, unsigned mnemonic, unsigned dispType, int displacement );
 
-  bool x86GenOpFarDisp( FILE* binFile, unsigned mnemonic,
-    unsigned seg, unsigned offset );
+  bool x86GenOpFarOfs( FILE* binFile, unsigned mnemonic,
+    unsigned selector, unsigned offset );
 
   bool x86GenOpMemRegImm( FILE* binFile, unsigned segOverride, x86Addr* addr,
     unsigned reg, unsigned imm );
@@ -1034,10 +1043,13 @@ int main( int argc, char* argv[] ) {
     x86GenOpRegMem( binFile, x86Adc, x86RegCL, x86SRegFS, &addr );
 
     x86GenOpRegImm( binFile, x86Adc, x86RegCL, 0x11 );
-    x86GenOpRegImm( binFile, x86Adc, x86RegCL, -100 );
+    x86GenOpRegImm( binFile, x86Adc, x86RegCL, 100 );
+    x86GenOpRegImm( binFile, x86Adc, x86RegBH, -100 );
     x86GenOpRegImm( binFile, x86Adc, x86RegCX, 0x1122 );
-    x86GenOpRegImm( binFile, x86Adc, x86RegDI, -100 );
+    x86GenOpRegImm( binFile, x86Adc, x86RegDX, -100 );
+    x86GenOpRegImm( binFile, x86Adc, x86RegDI, 100 );
     x86GenOpRegImm( binFile, x86Adc, x86RegECX, 0x11223344 );
+    x86GenOpRegImm( binFile, x86Adc, x86RegESI, 100 );
     x86GenOpRegImm( binFile, x86Adc, x86RegEDI, -100 );
 
     x86GenOpRegRegReg( binFile, x86Shrd, x86RegECX, x86RegEDI, x86RegCL );
@@ -1070,9 +1082,18 @@ int main( int argc, char* argv[] ) {
     x86GenOpMem( binFile, x86Push, x86Mem32, x86SRegGS, &addr );
 
     x86GenOpImm( binFile, x86Push, valUint16, 0x1122 );
+    x86GenOpImm( binFile, x86Push, valUint16, 100 );
     x86GenOpImm( binFile, x86Push, valUint16, -100 );
     x86GenOpImm( binFile, x86Push, valUint32, 0x11223344 );
+    x86GenOpImm( binFile, x86Push, valUint32, 100 );
     x86GenOpImm( binFile, x86Push, valUint32, -100 );
+
+    x86GenOpDisp( binFile, x86Call, x86Near, 0x11223344 );
+    x86GenOpDisp( binFile, x86Jmp, x86Short, 0x11 );
+    x86GenOpDisp( binFile, x86Jmp, x86Near, 0x11223344 );
+
+    x86GenOpFarOfs( binFile, x86Call, 0xAABB, 0x11223344 );
+    x86GenOpFarOfs( binFile, x86Jmp, 0xAABB, 0x11223344 );
 
     fclose( binFile );
     binFile = NULL;
@@ -2893,7 +2914,6 @@ int main( int argc, char* argv[] ) {
     return x86Emit(binFile, &instruction);
   }
 
-;;;
   bool x86GenOpMem( FILE* binFile, unsigned mnemonic,
       unsigned memType, unsigned segOverride, x86Addr* addr ) {
     x86Instruction instruction = {};
@@ -3190,7 +3210,7 @@ int main( int argc, char* argv[] ) {
       case valInt32:
       case valUint16:
       case valUint32:
-        if( (imm & 0xFFFFFF00) == 0xFFFFFF00 ) {
+        if( ((int)imm >= -128) && ((int)imm <= 127) ) {
           instruction.fields &= (~hasImm32);
           instruction.fields |= hasImm8;
           instruction.opcode[opIndex] |= (1 << 1);
@@ -3211,23 +3231,110 @@ int main( int argc, char* argv[] ) {
     return x86Emit(binFile, &instruction);
   }
 
-  bool x86GenOpDisp( FILE* binFile, unsigned mnemonic, int disp ) {
-    return false;
+  bool x86GenOpDisp( FILE* binFile, unsigned mnemonic, unsigned dispType, int displacement ) {
+    x86Instruction instruction = {};
+
+    if( dispType == 0 ) {
+      dispType = x86Near;
+      if( (displacement >= -128) && (displacement <= 127) ) {
+        dispType = x86Short;
+      }
+    }
+
+    switch( mnemonic ) {
+    case x86Call:
+      if( dispType != x86Near ) {
+        return false;
+      }
+      instruction.opcode[0] = 0xE8;
+      break;
+
+    case x86Jmp:
+      instruction.opcode[0] = 0xE9;
+      if( dispType == x86Short ) {
+        instruction.opcode[0] = 0xEB;
+      }
+      break;
+
+    default:
+      return false;
+    }
+    instruction.fields |= hasOpcode1;
+
+    switch( dispType ) {
+    case x86Short:
+      instruction.fields |= hasDisp8;
+      instruction.displacement = (displacement - 2);
+      break;
+
+    case x86Near:
+      switch( target.bits ) {
+      case 16:
+        instruction.fields |= hasDisp16;
+        instruction.displacement = (displacement - 3);
+        break;
+      case 32:
+        instruction.fields |= hasDisp32;
+        instruction.displacement = (displacement - 5);
+        break;
+      default:
+        return false;
+      }
+      break;
+
+    default:
+      return false;
+    }
+
+    return x86Emit(binFile, &instruction);
   }
 
-  bool x86GenOpFarDisp( FILE* binFile, unsigned mnemonic,
-    unsigned seg, unsigned offset ) {
-    return false;
+  bool x86GenOpFarOfs( FILE* binFile, unsigned mnemonic,
+      unsigned selector, unsigned offset ) {
+    x86Instruction instruction = {};
+
+    switch( mnemonic ) {
+    case x86Call:
+      instruction.opcode[0] = 0x9A;
+      break;
+
+    case x86Jmp:
+      instruction.opcode[0] = 0xEA;
+      break;
+
+    default:
+      return false;
+    }
+    instruction.fields |= hasOpcode1;
+
+    switch( target.bits ) {
+    case 16:
+      instruction.fields |= hasImm16 | hasDisp16;
+      instruction.immediate = selector;
+      instruction.displacement = offset;
+      break;
+
+    case 32:
+      instruction.fields |= hasImm16 | hasDisp32;
+      instruction.immediate = selector;
+      instruction.displacement = offset;
+      break;
+
+    default:
+      return false;
+    }
+
+    return x86Emit(binFile, &instruction);
   }
 
   bool x86GenOpMemRegImm( FILE* binFile, unsigned segOverride, x86Addr* addr,
-    unsigned reg, unsigned imm ) {
+      unsigned reg, unsigned imm ) {
     return false;
   }
 
   bool x86GenOpRegMemImm( FILE* binFile, unsigned mnemonic,
-    unsigned destReg, unsigned segOverride, x86Addr* addr,
-    unsigned imm ) {
+      unsigned destReg, unsigned segOverride, x86Addr* addr,
+      unsigned imm ) {
     return false;
   }
 
@@ -3862,7 +3969,7 @@ int main( int argc, char* argv[] ) {
       switch( destReg & x86OperandMask ) {
       case x86Reg16:
       case x86Reg32:
-        if( (imm & 0xFFFFFF00) == 0xFFFFFF00 ) {
+        if( ((int)imm >= -128) && ((int)imm <= 127) ) {
           instruction.fields &= (~hasImm32);
           instruction.fields |= hasImm8;
           instruction.opcode[opIndex] |= (1 << 1);
