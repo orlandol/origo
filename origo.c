@@ -1115,16 +1115,18 @@ int main( int argc, char* argv[] ) {
     addr.baseReg = x86RegEDX;
     addr.indexReg = x86RegEBP;
     addr.displacement = 0xAABBCCDD;
-    x86GenOpMemRegImm( binFile, x86Shrd, x86SRegES, &addr, x86RegECX, 0x11 );
+    x86GenOpMemRegImm( binFile, x86Shrd, x86SRegES, &addr, x86RegECX, 0x11223344 );
     addr.displacement = 0;
-    x86GenOpMemRegImm( binFile, x86Shrd, 0, &addr, x86RegEBX, 0x11 );
+    x86GenOpMemRegImm( binFile, x86Shrd, 0, &addr, x86RegEBX, 100 );
+    x86GenOpMemRegImm( binFile, x86Shrd, x86SRegSS, &addr, x86RegESI, -100 );
 
     addr.baseReg = x86RegBP;
     addr.indexReg = x86RegDI;
     addr.displacement = 0xAABB;
-    x86GenOpMemRegImm( binFile, x86Shrd, x86SRegES, &addr, x86RegCX, 0x11 );
+    x86GenOpMemRegImm( binFile, x86Shrd, x86SRegES, &addr, x86RegCX, 0x11223344 );
     addr.displacement = 0;
-    x86GenOpMemRegImm( binFile, x86Shrd, 0, &addr, x86RegBX, 0x11 );
+    x86GenOpMemRegImm( binFile, x86Shrd, 0, &addr, x86RegBX, 100 );
+    x86GenOpMemRegImm( binFile, x86Shrd, x86SRegSS, &addr, x86RegSI, -100 );
 
     fclose( binFile );
     binFile = NULL;
@@ -2262,8 +2264,8 @@ int main( int argc, char* argv[] ) {
     /* 17 */ x86Shrd, firstX86Reg16, lastX86Reg16, firstX86Reg16, lastX86Reg16, x86RegCL, x86RegCL, 12,
     /* 18 */ x86Shrd, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, x86RegCL, x86RegCL, 12,
     /* 19 */ x86Shrd, x86Mem16, x86Mem32, firstX86Reg16, lastX86Reg16, valUint8, valUint8, 13,
-    /* 20 */ x86Shrd, x86Mem16, x86Mem32, firstX86Reg16, lastX86Reg16, valUint8, valUint8, 13,
-    /* 21 */ x86Shrd, x86Mem16, x86Mem32, firstX86Reg32, lastX86Reg32, x86RegCL, x86RegCL, 14,
+    /* 20 */ x86Shrd, x86Mem16, x86Mem32, firstX86Reg32, lastX86Reg32, valUint8, valUint8, 13,
+    /* 21 */ x86Shrd, x86Mem16, x86Mem32, firstX86Reg16, lastX86Reg16, x86RegCL, x86RegCL, 14,
     /* 22 */ x86Shrd, x86Mem16, x86Mem32, firstX86Reg32, lastX86Reg32, x86RegCL, x86RegCL, 14,
 
     // push
@@ -2313,8 +2315,8 @@ int main( int argc, char* argv[] ) {
     // shrd encodings
     /* 11 */ hasOpcode1 | hasOpcode2 | hasModRM, 0, 0, 0, 0, 0x0F, 0xAC, 0, 0xC0, xformSizeW, xformRMReg, xformModReg, xformToImm8,
     /* 12 */ hasOpcode1 | hasOpcode2 | hasModRM, 0, 0, 0, 0, 0x0F, 0xAD, 0, 0xC0, xformSizeW, xformRMReg, xformModReg, 0,
-    /* 13 */ hasOpcode1 | hasOpcode2 | hasModRM, 0, 0, 0, 0, 0x0F, 0xAC, 0, 0xC0, xformSizeW, 0, xformModReg, xformToImm8,
-    /* 14 */ hasOpcode1 | hasOpcode2 | hasModRM, 0, 0, 0, 0, 0x0F, 0xAD, 0, 0xC0, xformSizeW, 0, xformModReg, 0,
+    /* 13 */ hasOpcode1 | hasOpcode2, 0, 0, 0, 0, 0x0F, 0xAC, 0, 0, xformSizeW, 0, xformModReg, xformToImm8,
+    /* 14 */ hasOpcode1 | hasOpcode2, 0, 0, 0, 0, 0x0F, 0xAD, 0, 0, xformSizeW, 0, xformModReg, 0,
 
     // push encodings
     /* 15 */ hasOpcode1, 0, 0, 0, 0, 0x50, 0, 0, 0, xformOpRegW, 0, 0, 0,
@@ -3402,8 +3404,9 @@ int main( int argc, char* argv[] ) {
     if( formatIndex > formatCount ) {
       return false;
     }
+printf( "Checkpoint: formatIndex = %u\n", formatIndex );
 
-    do {
+    while( formatIndex < formatCount ) {
       if( formatTable[formatIndex].mnemonic != mnemonic ) {
         return false;
       }
@@ -3412,16 +3415,20 @@ int main( int argc, char* argv[] ) {
       param2 = formatTable[formatIndex].param[1];
       param3 = formatTable[formatIndex].param[2];
 
-      if( (param3.first >= firstValUint) && (lastValUint <= param3.last) ) {
-        if( (param2.first <= srcReg) && (srcReg <= param2.last) ) {
+      if( (param3.first >= firstValUint) && (param3.last <= lastValUint) ) {
+        if( (param2.first <= srcReg) && (param2.last >= srcReg) ) {
           if( (param1.first >= firstX86Mem) && (lastX86Mem <= param1.last) ) {
+printf( "Checkpoint: param3 => (%u >= %u) && (%u <= %u)\n", param3.first, firstValUint, param3.last, lastValUint );
+printf( "Checkpoint: param2 => (%u <= %u) && (%u >= %u)\n", param2.first, srcReg, param2.last, srcReg );
+printf( "Checkpoint: param1 => (%u >= %u) && (%u <= %u)\n", param1.first, firstX86Mem, lastX86Mem, param1.last );
+printf( "Checkpoint: found => formatIndex = %u\n", formatIndex );
             break;
           }
         }
       }
 
       formatIndex++;
-    } while( formatIndex < formatCount );
+    }
 
     encodeIndex = formatTable[formatIndex].index;
     if( encodeIndex >= encodeCount ) {
@@ -3545,7 +3552,6 @@ int main( int argc, char* argv[] ) {
     if( encodeTable[encodeIndex].xform[0] ) {
       return false;
     }
-printf( "Checkpoint\n" );
 
     // Register transforms
     switch( encodeTable[encodeIndex].xform[1] ) {
@@ -3623,7 +3629,7 @@ printf( "Checkpoint\n" );
       return false;
     }
 
-    do {
+    while( formatIndex < formatCount ) {
       if( formatTable[formatIndex].mnemonic != mnemonic ) {
         return false;
       }
@@ -3641,7 +3647,7 @@ printf( "Checkpoint\n" );
       }
 
       formatIndex++;
-    } while( formatIndex < formatCount );
+    }
 
     encodeIndex = formatTable[formatIndex].index;
     if( encodeIndex >= encodeCount ) {
@@ -3798,6 +3804,11 @@ printf( "Checkpoint\n" );
           instruction.opcode[opIndex] |= (1 << 1);
         }
       }
+      break;
+
+    case xformToImm8:
+      instruction.fields &= (~hasImm32);
+      instruction.fields |= hasImm8;
       break;
 
     default:
