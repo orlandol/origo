@@ -9,6 +9,18 @@
 #include "keyarray.h"
 
 /*
+ *  Macro wrappers for compiler specific syntax
+ */
+
+  #define BEGIN_PACKEDSTRUCT(structName)\
+  typedef struct structName {
+
+  #define DECL_PACKEDFIELD(typeSpec, fieldName) typeSpec fieldName __attribute__((packed));
+
+  #define END_PACKEDSTRUCT(structName)\
+  } structName __attribute__((packed));
+
+/*
  *  Global variables
  */
   int argCount;
@@ -775,17 +787,178 @@
  *  Windows PE declarations
  */
 
+  // Windows Portable Executable object
   typedef struct WinPE {
     FILE* handle;
-    size_t entryPoint;
+    size_t codeStart;
+    size_t codeEntry;
     unsigned sizeFlag;
     uint8_t sizePrefix;
   } WinPE;
 
-  typedef struct WinPEHeader {
-    ///TODO: Define barebones PE header
-  } WinPEHeader;
+  // MS-DOS stub file header
+  #define SIG_MZEXE (((uint16_t)'M' << 8) | 'Z')
 
+  // MZExeHeader based on DOS_Header from
+  // x86_Disassembly: Executable Files WikiBook
+  // https://en.wikibooks.org/wiki/X86_Disassembly/Windows_Executable_Files#MS-DOS_header
+  ///TODO: Verify field are named according to Microsoft's documentation
+  BEGIN_PACKEDSTRUCT(MZHeader)
+    DECL_PACKEDFIELD(uint16_t, signature) // 'MZ', SIG_MZEXE
+    DECL_PACKEDFIELD(uint16_t, lastSize)
+    DECL_PACKEDFIELD(uint16_t, nblocks)
+    DECL_PACKEDFIELD(uint16_t, nreloc)
+    DECL_PACKEDFIELD(uint16_t, hdrsize)
+    DECL_PACKEDFIELD(uint16_t, minalloc)
+    DECL_PACKEDFIELD(uint16_t, maxalloc)
+    DECL_PACKEDFIELD(uint16_t, initSS)
+    DECL_PACKEDFIELD(uint16_t, initSP)
+    DECL_PACKEDFIELD(uint16_t, checksum)
+    DECL_PACKEDFIELD(uint16_t, entryIP)
+    DECL_PACKEDFIELD(uint16_t, entryCS)
+    DECL_PACKEDFIELD(uint16_t, relocpos)
+    DECL_PACKEDFIELD(uint16_t, noverlay)
+    DECL_PACKEDFIELD(uint16_t, reserved1[4])
+    DECL_PACKEDFIELD(uint16_t, oemID)
+    DECL_PACKEDFIELD(uint16_t, oemInfo)
+    DECL_PACKEDFIELD(uint16_t, reserved2[10])
+    DECL_PACKEDFIELD(uint32_t, e_lfanew) // Offset to PE signature
+  END_PACKEDSTRUCT(MZHeader)
+
+  // COFF file header
+
+  #define CM_I386 0x14C
+
+  // From https://en.wikibooks.org/wiki/X86_Disassembly/Windows_Executable_Files#COFF_Header
+  ///TODO: Verify definitions are named according to Microsoft's documentation
+  #define IMAGE_FILE_EXECUTABLE_IMAGE 0x0002
+  #define IMAGE_FILE_32BIT_MACHINE    0x0100
+
+  // COFFHeader based on x86 Disassembly: Executable Files WikiBook
+  // https://en.wikibooks.org/wiki/X86_Disassembly/Windows_Executable_Files#COFF_Header
+  ///TODO: Verify field are named according to Microsoft's documentation
+  BEGIN_PACKEDSTRUCT(COFFHeader)
+    DECL_PACKEDFIELD(uint16_t, Machine)
+    DECL_PACKEDFIELD(uint16_t, NumberOfSections)
+    DECL_PACKEDFIELD(uint32_t, TimeDateStamp)
+    DECL_PACKEDFIELD(uint32_t, PointerToSymbolTable)
+    DECL_PACKEDFIELD(uint32_t, NumberOfSymbols)
+    DECL_PACKEDFIELD(uint16_t, SizeOfOptionalHeader)
+    DECL_PACKEDFIELD(uint16_t, Characteristics)
+  END_PACKEDSTRUCT(COFFHeader)
+
+  // Windows PE optional file header
+
+  #define SIG_PEXE (((uint32_t)'E' << 8) | 'P')
+
+  #define IMAGE_DIRECTORY_ENTRY_EXPORT 0
+  #define IMAGE_DIRECTORY_ENTRY_IMPORT 1
+  #define IMAGE_DIRECTORY_ENTRY_RESOURCE 2
+  #define IMAGE_DIRECTORY_ENTRY_EXCEPTION 3
+  #define IMAGE_DIRECTORY_ENTRY_SECURITY 4
+  #define IMAGE_DIRECTORY_ENTRY_BASERELOC 5
+  #define IMAGE_DIRECTORY_ENTRY_DEBUG 6
+  #define IMAGE_DIRECTORY_ENTRY_ARCHITECTURE 7
+  #define IMAGE_DIRECTORY_ENTRY_GLOBALPTR 8
+  #define IMAGE_DIRECTORY_ENTRY_TLS 9
+  #define IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG 10
+  #define IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT 11
+  #define IMAGE_DIRECTORY_ENTRY_IAT 12
+  #define IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT 13
+  #define IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR 14
+  #define IMAGE_DIRECTORY_ENTRY_RSVD 15
+
+  // PEOptDataDirectory and PEOptHeader based on
+  // x86 Disassembly: Executable Files WikiBook
+  // https://en.wikibooks.org/wiki/X86_Disassembly/Windows_Executable_Files#PE_Optional_Header
+  ///TODO: Verify field are named according to Microsoft's documentation
+  BEGIN_PACKEDSTRUCT(PEOptDataDirectory)
+    DECL_PACKEDFIELD(uint32_t, VirtualAddress)
+    DECL_PACKEDFIELD(uint32_t, Size)
+  END_PACKEDSTRUCT(PEOptDataDirectory)
+
+  #define IMAGE_SCN_CNT_CODE 0x00000020
+  #define IMAGE_SCN_CNT_INITIALIZED_DATA 0x00000040
+  #define IMAGE_SCN_CNT_UNINITIALIZED_DATA 0x00000080
+  #define IMAGE_SCN_ALIGN_1BYTES 0x00100000
+  #define IMAGE_SCN_ALIGN_16BYTES 0x00500000
+  #define IMAGE_SCN_MEM_DISCARDABLE 0x02000000
+  #define IMAGE_SCN_MEM_SHARED 0x10000000
+  #define IMAGE_SCN_MEM_EXECUTE 0x20000000
+  #define IMAGE_SCN_MEM_READ 0x40000000
+  #define IMAGE_SCN_MEM_WRITE 0x80000000
+
+  #define IMAGE_SIZEOF_SHORT_NAME 8
+
+  BEGIN_PACKEDSTRUCT(PESectionFileHeader)
+    DECL_PACKEDFIELD(char, Name[IMAGE_SIZEOF_SHORT_NAME])
+    DECL_PACKEDFIELD(union{uint32_t PhysicalAddress; uint32_t VirtualSize;}, Misc)
+    DECL_PACKEDFIELD(uint32_t, VirtualAddress)
+    DECL_PACKEDFIELD(uint32_t, SizeOfRawData)
+    DECL_PACKEDFIELD(uint32_t, PointerToRawData)
+    DECL_PACKEDFIELD(uint32_t, PointerToRelocations)
+    DECL_PACKEDFIELD(uint32_t, PointerToLinenumbers)
+    DECL_PACKEDFIELD(uint16_t, NumberOfRelocations)
+    DECL_PACKEDFIELD(uint16_t, NumberOfLinenumbers)
+    DECL_PACKEDFIELD(uint32_t, Characteristics)
+  END_PACKEDSTRUCT(PESectionFileHeader)
+
+  #define IMAGE_NT_OPTIONAL_HDR32_MAGIC 0x010B
+  #define IMAGE_NT_OPTIONAL_HDR64_MAGIC 0x020B
+  #define IMAGE_ROM_OPTIONAL_HDR_MAGIC  0x0107
+
+  #define IMAGE_SUBSYSTEM_WINDOWS_GUI 2
+  #define IMAGE_SUBSYSTEM_WINDOWS_CUI 3
+
+  BEGIN_PACKEDSTRUCT(PEOptHeader32)
+    DECL_PACKEDFIELD(uint16_t, signature)
+    DECL_PACKEDFIELD(uint8_t,  MajorLinkedVersion)
+    DECL_PACKEDFIELD(uint8_t,  MinorLinkedVersion)
+    DECL_PACKEDFIELD(uint32_t, SizeOfCode)
+    DECL_PACKEDFIELD(uint32_t, SizeOfInitializedData)
+    DECL_PACKEDFIELD(uint32_t, SizeOfUninitializedData)
+    DECL_PACKEDFIELD(uint32_t, AddressOfEntryPoint) // Entry point RVA
+    DECL_PACKEDFIELD(uint32_t, BaseOfCode)
+    DECL_PACKEDFIELD(uint32_t, BaseOfData)
+    DECL_PACKEDFIELD(uint32_t, ImageBase) // Default App: 0x00400000
+    DECL_PACKEDFIELD(uint32_t, SectionAlignment) // Default: 4096 (Page)
+    DECL_PACKEDFIELD(uint32_t, FileAlignment) // Default: 512
+    DECL_PACKEDFIELD(uint16_t, MajorOSVersion)
+    DECL_PACKEDFIELD(uint16_t, MinorOSVersion)
+    DECL_PACKEDFIELD(uint16_t, MajorImageVersion)
+    DECL_PACKEDFIELD(uint16_t, MinorImageVersion)
+    DECL_PACKEDFIELD(uint16_t, MajorSubsystemVersion)
+    DECL_PACKEDFIELD(uint16_t, MinorSubsystemVersion)
+    DECL_PACKEDFIELD(uint32_t, Win32VersionValue)
+    DECL_PACKEDFIELD(uint32_t, SizeOfImage)
+    DECL_PACKEDFIELD(uint32_t, SizeOfHeaders)
+    DECL_PACKEDFIELD(uint32_t, Checksum)
+    DECL_PACKEDFIELD(uint16_t, Subsystem)
+    DECL_PACKEDFIELD(uint16_t, DLLCharacteristics)
+    DECL_PACKEDFIELD(uint32_t, SizeOfStackReserve) // "Max"
+    DECL_PACKEDFIELD(uint32_t, SizeOfStackCommit) // "First" += 4K until "Max"
+    DECL_PACKEDFIELD(uint32_t, SizeOfHeapReserve) // "Max"
+    DECL_PACKEDFIELD(uint32_t, SizeOfHeapCommit) // "First" += 4K until "Max"
+    DECL_PACKEDFIELD(uint32_t, LoaderFlags)
+    DECL_PACKEDFIELD(uint32_t, NumberOfRVAAndSizes)
+    DECL_PACKEDFIELD(PEOptDataDirectory, DataDirectory[16])
+  END_PACKEDSTRUCT(PEOptHeader)
+
+  // Import directory
+  BEGIN_PACKEDSTRUCT(PEImportDescriptor)
+    DECL_PACKEDFIELD(uint32_t*, OriginalFirstThunk)
+    DECL_PACKEDFIELD(uint32_t, TimeDateStamp)
+    DECL_PACKEDFIELD(uint32_t, ForwarderChain)
+    DECL_PACKEDFIELD(uint32_t, Name)
+    DECL_PACKEDFIELD(uint32_t*, FirstThunk)
+  END_PACKEDSTRUCT(PEImportDescriptor)
+
+  BEGIN_PACKEDSTRUCT(PEImportByName)
+    DECL_PACKEDFIELD(uint16_t, Hint)
+    DECL_PACKEDFIELD(uint8_t, Name[1])
+  END_PACKEDSTRUCT(PEImportByName)
+
+  // Windows Portable Executable functions
   WinPE* CreatePE( char* fileName );
   void ClosePE( WinPE** winpe );
 
@@ -1026,6 +1199,11 @@ int main( int argc, char* argv[] ) {
     PrintUsage();
     return 1;
   }
+
+  printf( "sizeof(PEOptHeader) = %u\n", sizeof(PEOptHeader) );
+
+  WinPE* peFile = CreatePE("out.exe");
+  ClosePE( &peFile );
 
   FILE* binFile = fopen("out", "wb");
   if( binFile ) {
@@ -2080,6 +2258,10 @@ int main( int argc, char* argv[] ) {
   WinPE* CreatePE( char* fileName ) {
     WinPE* newPE = NULL;
     FILE* dosStub = NULL;
+    uint8_t fileBuf[256];
+    size_t bytesRead;
+    size_t bytesWritten;
+    size_t pePos;
 
     if( !(fileName && (*fileName)) ) {
       return NULL;
@@ -2095,9 +2277,29 @@ int main( int argc, char* argv[] ) {
       goto ReturnError;
     }
 
-    ///TODO: Write default header
+    // Write MS-DOS stub
+    dosStub = fopen("dosstub", "rb");
+    if( dosStub == NULL ) {
+      goto ReturnError;
+    }
 
-    ///TODO: Write MS-DOS stub
+    do {
+      bytesRead = fread(fileBuf, 1, sizeof(fileBuf), dosStub);
+      bytesWritten = fwrite(fileBuf, 1, bytesRead, newPE->handle);
+    } while( bytesWritten );
+
+    fclose( dosStub );
+    dosStub = NULL;
+
+    ///TODO: Write default header
+    pePos = ftell(newPE->handle);
+    if( pePos == -1L ) {
+      goto ReturnError;
+    }
+
+    if( fseek(newPE->handle, 0x3C, SEEK_SET) ) {
+      goto ReturnError;
+    }
 
     return newPE;
 
@@ -2259,24 +2461,24 @@ int main( int argc, char* argv[] ) {
     /* 14 */ x86Add, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, 0, 0, 9,
 
     // shrd
-    /* 15 */ x86Shrd, firstX86Reg16, lastX86Reg16, firstX86Reg16, lastX86Reg16, valUint8, valUint8, 11,
-    /* 16 */ x86Shrd, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, valUint8, valUint8, 11,
-    /* 17 */ x86Shrd, firstX86Reg16, lastX86Reg16, firstX86Reg16, lastX86Reg16, x86RegCL, x86RegCL, 12,
-    /* 18 */ x86Shrd, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, x86RegCL, x86RegCL, 12,
-    /* 19 */ x86Shrd, x86Mem16, x86Mem32, firstX86Reg16, lastX86Reg16, valUint8, valUint8, 13,
-    /* 20 */ x86Shrd, x86Mem16, x86Mem32, firstX86Reg32, lastX86Reg32, valUint8, valUint8, 13,
-    /* 21 */ x86Shrd, x86Mem16, x86Mem32, firstX86Reg16, lastX86Reg16, x86RegCL, x86RegCL, 14,
-    /* 22 */ x86Shrd, x86Mem16, x86Mem32, firstX86Reg32, lastX86Reg32, x86RegCL, x86RegCL, 14,
+    /* 15 */ x86Shrd, firstX86Reg16, lastX86Reg16, firstX86Reg16, lastX86Reg16, valUint8, valUint8, 10,
+    /* 16 */ x86Shrd, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, valUint8, valUint8, 10,
+    /* 17 */ x86Shrd, firstX86Reg16, lastX86Reg16, firstX86Reg16, lastX86Reg16, x86RegCL, x86RegCL, 11,
+    /* 18 */ x86Shrd, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, x86RegCL, x86RegCL, 11,
+    /* 19 */ x86Shrd, x86Mem16, x86Mem32, firstX86Reg16, lastX86Reg16, valUint8, valUint8, 12,
+    /* 20 */ x86Shrd, x86Mem16, x86Mem32, firstX86Reg32, lastX86Reg32, valUint8, valUint8, 12,
+    /* 21 */ x86Shrd, x86Mem16, x86Mem32, firstX86Reg16, lastX86Reg16, x86RegCL, x86RegCL, 13,
+    /* 22 */ x86Shrd, x86Mem16, x86Mem32, firstX86Reg32, lastX86Reg32, x86RegCL, x86RegCL, 13,
 
     // push
-    /* 23 */ x86Push, firstX86Reg16, lastX86Reg16, 0, 0, 0, 0, 15,
-    /* 24 */ x86Push, firstX86Reg32, lastX86Reg32, 0, 0, 0, 0, 15,
-    /* 25 */ x86Push, x86Mem16, x86Mem32, 0, 0, 0, 0, 16,
-    /* 26 */ x86Push, valUint16, valUint32, 0, 0, 0, 0, 17,
+    /* 23 */ x86Push, firstX86Reg16, lastX86Reg16, 0, 0, 0, 0, 14,
+    /* 24 */ x86Push, firstX86Reg32, lastX86Reg32, 0, 0, 0, 0, 14,
+    /* 25 */ x86Push, x86Mem16, x86Mem32, 0, 0, 0, 0, 15,
+    /* 26 */ x86Push, valUint16, valUint32, 0, 0, 0, 0, 16,
 
     // imul
-    /* 27 */ x86Imul, firstX86Reg16, lastX86Reg16, firstX86Mem, lastX86Mem, firstValUint, lastValUint, 18,
-    /* 28 */ x86Imul, firstX86Reg32, lastX86Reg32, firstX86Mem, lastX86Mem, firstValUint, lastValUint, 18,
+    /* 27 */ x86Imul, firstX86Reg16, lastX86Reg16, firstX86Mem, lastX86Mem, firstValUint, lastValUint, 17,
+    /* 28 */ x86Imul, firstX86Reg32, lastX86Reg32, firstX86Mem, lastX86Mem, firstValUint, lastValUint, 17,
   };
   const formatCount = sizeof(formatTable) / sizeof(formatTable[0]);
 
@@ -2309,22 +2511,19 @@ int main( int argc, char* argv[] ) {
     /*  8 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x00, 0, 0, 0xC0, 0, xformRMReg, xformModReg, 0,
     /*  9 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x00, 0, 0, 0xC0, xformOpW, xformRMReg, xformModReg, 0,
 
-    // xlatb encodings
-    /* 10 */ hasOpcode1, 0, 0, 0, 0, 0xD7, 0, 0, 0, 0, 0, 0, 0,
-
     // shrd encodings
-    /* 11 */ hasOpcode1 | hasOpcode2 | hasModRM, 0, 0, 0, 0, 0x0F, 0xAC, 0, 0xC0, xformSizeW, xformRMReg, xformModReg, xformToImm8,
-    /* 12 */ hasOpcode1 | hasOpcode2 | hasModRM, 0, 0, 0, 0, 0x0F, 0xAD, 0, 0xC0, xformSizeW, xformRMReg, xformModReg, 0,
-    /* 13 */ hasOpcode1 | hasOpcode2, 0, 0, 0, 0, 0x0F, 0xAC, 0, 0, xformSizeW, 0, xformModReg, xformToImm8,
-    /* 14 */ hasOpcode1 | hasOpcode2, 0, 0, 0, 0, 0x0F, 0xAD, 0, 0, xformSizeW, 0, xformModReg, 0,
+    /* 10 */ hasOpcode1 | hasOpcode2 | hasModRM, 0, 0, 0, 0, 0x0F, 0xAC, 0, 0xC0, xformSizeW, xformRMReg, xformModReg, xformToImm8,
+    /* 11 */ hasOpcode1 | hasOpcode2 | hasModRM, 0, 0, 0, 0, 0x0F, 0xAD, 0, 0xC0, xformSizeW, xformRMReg, xformModReg, 0,
+    /* 12 */ hasOpcode1 | hasOpcode2, 0, 0, 0, 0, 0x0F, 0xAC, 0, 0, xformSizeW, 0, xformModReg, xformToImm8,
+    /* 13 */ hasOpcode1 | hasOpcode2, 0, 0, 0, 0, 0x0F, 0xAD, 0, 0, xformSizeW, 0, xformModReg, 0,
 
     // push encodings
-    /* 15 */ hasOpcode1, 0, 0, 0, 0, 0x50, 0, 0, 0, xformOpRegW, 0, 0, 0,
-    /* 16 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0xFF, 0, 0, 0x30, xformSizeW, 0, 0, 0,
-    /* 17 */ hasOpcode1, 0, 0, 0, 0, 0x68, 0, 0, 0, xformSizeW, xformImmS8, 0, 0,
+    /* 14 */ hasOpcode1, 0, 0, 0, 0, 0x50, 0, 0, 0, xformOpRegW, 0, 0, 0,
+    /* 15 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0xFF, 0, 0, 0x30, xformSizeW, 0, 0, 0,
+    /* 16 */ hasOpcode1, 0, 0, 0, 0, 0x68, 0, 0, 0, xformSizeW, xformImmS8, 0, 0,
 
     // imul
-    /* 18 */ hasOpcode1, 0, 0, 0, 0, 0x69, 0, 0, 0, xformSizeW, xformModReg, 0, xformImmS8,
+    /* 17 */ hasOpcode1, 0, 0, 0, 0, 0x69, 0, 0, 0, xformSizeW, xformModReg, 0, xformImmS8,
   };
   const encodeCount = sizeof(encodeTable) / sizeof(encodeTable[0]);
 
@@ -3404,7 +3603,6 @@ int main( int argc, char* argv[] ) {
     if( formatIndex > formatCount ) {
       return false;
     }
-printf( "Checkpoint: formatIndex = %u\n", formatIndex );
 
     while( formatIndex < formatCount ) {
       if( formatTable[formatIndex].mnemonic != mnemonic ) {
@@ -3415,13 +3613,9 @@ printf( "Checkpoint: formatIndex = %u\n", formatIndex );
       param2 = formatTable[formatIndex].param[1];
       param3 = formatTable[formatIndex].param[2];
 
-      if( (param3.first >= firstValUint) && (param3.last <= lastValUint) ) {
-        if( (param2.first <= srcReg) && (param2.last >= srcReg) ) {
+      if( (param3.first >= firstValUint) && (lastValUint <= param3.last) ) {
+        if( (param2.first <= srcReg) && (srcReg <= param2.last) ) {
           if( (param1.first >= firstX86Mem) && (lastX86Mem <= param1.last) ) {
-printf( "Checkpoint: param3 => (%u >= %u) && (%u <= %u)\n", param3.first, firstValUint, param3.last, lastValUint );
-printf( "Checkpoint: param2 => (%u <= %u) && (%u >= %u)\n", param2.first, srcReg, param2.last, srcReg );
-printf( "Checkpoint: param1 => (%u >= %u) && (%u <= %u)\n", param1.first, firstX86Mem, lastX86Mem, param1.last );
-printf( "Checkpoint: found => formatIndex = %u\n", formatIndex );
             break;
           }
         }

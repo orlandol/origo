@@ -1,0 +1,115 @@
+Dump of file PE.EXE
+
+File Header
+  Machine:                      014C (i386)
+  Number of Sections:           0003
+  TimeDateStamp:                5D5A35CD -> Mon Aug 19 01:38:21 2019
+  PointerToSymbolTable:         00000000
+  NumberOfSymbols:              00000000
+  SizeOfOptionalHeader:         00E0
+  Characteristics:              0102
+    EXECUTABLE_IMAGE
+    32BIT_MACHINE
+
+Optional Header
+  Magic                         010B
+  linker version                0.00
+  size of code                  0
+  size of initialized data      0
+  size of uninitialized data    0
+  entrypoint RVA                1000
+  base of code                  0
+  base of data                  0
+  image base                    400000
+  section align                 1000
+  file align                    200
+  required OS version           1.00
+  image version                 0.00
+  subsystem version             4.00
+  Win32 Version                 0
+  size of image                 4000
+  size of headers               200
+  checksum                      0
+  Subsystem                     0003 (Windows character)
+  DLL flags                     0000
+  stack reserve size            100000
+  stack commit size             1000
+  heap reserve size             100000
+  heap commit size              1000
+  RVAs & sizes                  10
+
+Data Directory
+  EXPORT       rva: 00000000  size: 00000000
+  IMPORT       rva: 00002000  size: 00000056
+  RESOURCE     rva: 00000000  size: 00000000
+  EXCEPTION    rva: 00000000  size: 00000000
+  SECURITY     rva: 00000000  size: 00000000
+  BASERELOC    rva: 00003000  size: 0000000A
+  DEBUG        rva: 00000000  size: 00000000
+  COPYRIGHT    rva: 00000000  size: 00000000
+  GLOBALPTR    rva: 00000000  size: 00000000
+  TLS          rva: 00000000  size: 00000000
+  LOAD_CONFIG  rva: 00000000  size: 00000000
+  BOUND_IMPORT rva: 00000000  size: 00000000
+  IAT          rva: 00000000  size: 00000000
+  DELAY_IMPORT rva: 00000000  size: 00000000
+  unused       rva: 00000000  size: 00000000
+  unused       rva: 00000000  size: 00000000
+
+Section Table
+  01 text      VirtSize: 00001000  VirtAddr:  00001000
+    raw data offs:   00000200  raw data size: 00000008
+    relocation offs: 00000000  relocations:   00000000
+    line # offs:     00000000  line #'s:      00000000
+    characteristics: C0000040
+      INITIALIZED_DATA  READ  WRITE  ALIGN_DEFAULT(16)
+
+  02 imports   VirtSize: 00001000  VirtAddr:  00002000
+    raw data offs:   00000400  raw data size: 00000056
+    relocation offs: 00000000  relocations:   00000000
+    line # offs:     00000000  line #'s:      00000000
+    characteristics: 50000040
+      INITIALIZED_DATA  SHARED  READ  ALIGN_DEFAULT(16)
+
+  03 relocs    VirtSize: 00001000  VirtAddr:  00003000
+    raw data offs:   00000600  raw data size: 0000000A
+    relocation offs: 00000000  relocations:   00000000
+    line # offs:     00000000  line #'s:      00000000
+    characteristics: 52000040
+      INITIALIZED_DATA  DISCARDABLE  SHARED  READ  ALIGN_DEFAULT(16)
+
+
+
+
+Imports Table:
+  kernel32.dll
+  OrigFirstThunk:  00002038 (Unbound IAT)
+  TimeDateStamp:   00000000 -> Wed Dec 31 19:00:00 1969
+  ForwarderChain:  00000000
+  First thunk RVA: 00002040
+  Ordn  Name
+     0  ExitProcess (Bound to: 00002048)
+
+
+
+
+base relocations:
+
+Virtual Address: 00001000  size: 0000000A
+  00001004 HIGHLOW
+
+Section Hex Dumps
+section 01 (text)  size: 00000008  file offs: 00000200
+00000000:  6a 00 ff 15 40 20 40 00                          j...@ @.
+
+section 02 (imports)  size: 00000056  file offs: 00000400
+00000000:  38 20 00 00 00 00 00 00  00 00 00 00 28 20 00 00 8 ..........( ..
+00000010:  40 20 00 00 00 00 00 00  00 00 00 00 00 00 00 00 @ ..............
+00000020:  00 00 00 00 00 00 00 00  6b 65 72 6e 65 6c 33 32 ........kernel32
+00000030:  2e 64 6c 6c 00 00 00 00  48 20 00 00 00 00 00 00 .dll....H ......
+00000040:  48 20 00 00 00 00 00 00  00 00 45 78 69 74 50 72 H ........ExitPr
+00000050:  6f 63 65 73 73 00                                ocess.
+
+section 03 (relocs)  size: 0000000A  file offs: 00000600
+00000000:  00 10 00 00 0a 00 00 00  04 30                   .........0
+
