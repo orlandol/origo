@@ -942,7 +942,7 @@
     DECL_PACKEDFIELD(uint32_t, LoaderFlags)
     DECL_PACKEDFIELD(uint32_t, NumberOfRVAAndSizes)
     DECL_PACKEDFIELD(PEOptDataDirectory, DataDirectory[16])
-  END_PACKEDSTRUCT(PEOptHeader)
+  END_PACKEDSTRUCT(PEOptHeader32)
 
   // Import directory
   BEGIN_PACKEDSTRUCT(PEImportDescriptor)
@@ -1199,8 +1199,6 @@ int main( int argc, char* argv[] ) {
     PrintUsage();
     return 1;
   }
-
-  printf( "sizeof(PEOptHeader) = %u\n", sizeof(PEOptHeader) );
 
   WinPE* peFile = CreatePE("out.exe");
   ClosePE( &peFile );
@@ -2258,6 +2256,8 @@ int main( int argc, char* argv[] ) {
   WinPE* CreatePE( char* fileName ) {
     WinPE* newPE = NULL;
     FILE* dosStub = NULL;
+    uint32_t peSig = SIG_PEXE;
+    PEOptHeader32 optHeader = {};
     uint8_t fileBuf[256];
     size_t bytesRead;
     size_t bytesWritten;
@@ -2287,6 +2287,11 @@ int main( int argc, char* argv[] ) {
       bytesRead = fread(fileBuf, 1, sizeof(fileBuf), dosStub);
       bytesWritten = fwrite(fileBuf, 1, bytesRead, newPE->handle);
     } while( bytesWritten );
+
+    // Write PE signature and headers
+    if( fwrite(&peSig, 1, sizeof(peSig), newPE->handle) != sizeof(peSig) ) {
+      goto ReturnError;
+    }
 
     fclose( dosStub );
     dosStub = NULL;
