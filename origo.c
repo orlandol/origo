@@ -2257,6 +2257,7 @@ int main( int argc, char* argv[] ) {
     WinPE* newPE = NULL;
     FILE* dosStub = NULL;
     uint32_t peSig = SIG_PEXE;
+    COFFHeader coffHeader = {};
     PEOptHeader32 optHeader = {};
     uint8_t fileBuf[256];
     size_t bytesRead;
@@ -2288,23 +2289,80 @@ int main( int argc, char* argv[] ) {
       bytesWritten = fwrite(fileBuf, 1, bytesRead, newPE->handle);
     } while( bytesWritten );
 
-    // Write PE signature and headers
-    if( fwrite(&peSig, 1, sizeof(peSig), newPE->handle) != sizeof(peSig) ) {
-      goto ReturnError;
-    }
-
     fclose( dosStub );
     dosStub = NULL;
 
-    ///TODO: Write default header
     pePos = ftell(newPE->handle);
     if( pePos == -1L ) {
       goto ReturnError;
     }
 
+    // Write PE header offset to DOS Stub header
     if( fseek(newPE->handle, 0x3C, SEEK_SET) ) {
       goto ReturnError;
     }
+    if( fwrite(&pePos, 1, sizeof(pePos), newPE->handle) != sizeof(pePos) ) {
+      goto ReturnError;
+    }
+
+    if( fseek(newPE->handle, 0, SEEK_END) ) {
+      goto ReturnError;
+    }
+
+    // Write PE signature and headers
+    if( fwrite(&peSig, 1, sizeof(peSig), newPE->handle) != sizeof(peSig) ) {
+      goto ReturnError;
+    }
+
+    // Write COFF Header
+    coffHeader.Machine = CM_I386;
+    coffHeader.NumberOfSections = 0;
+    coffHeader.TimeDateStamp = 0;
+    coffHeader.PointerToSymbolTable = 0;
+    coffHeader.NumberOfSymbols = 0;
+    coffHeader.SizeOfOptionalHeader = sizeof(PEOptHeader32);
+    coffHeader.Characteristics =
+        IMAGE_FILE_EXECUTABLE_IMAGE | IMAGE_FILE_32BIT_MACHINE;
+    if( fwrite(&coffHeader, 1, sizeof(coffHeader), newPE->handle) != sizeof(coffHeader) ) {
+      goto ReturnError;
+    }
+
+    // Write Optional Header
+    optHeader.signature = IMAGE_NT_OPTIONAL_HDR32_MAGIC;
+    optHeader.MajorLinkedVersion = 0;
+    optHeader.MinorLinkedVersion = 1;
+    optHeader.SizeOfCode = 0;
+    optHeader.SizeOfInitializedData = 0;
+    optHeader.SizeOfUninitializedData = 0;
+    optHeader.AddressOfEntryPoint = 0x1000; // Entry point RVA
+    optHeader.BaseOfCode = 0;
+    optHeader.BaseOfData = 0;
+    optHeader.ImageBase = 0x00400000; // Default App
+    optHeader.SectionAlignment = 0x1000; // Default
+    optHeader.FileAlignment = 0x200; // Default
+    optHeader.MajorOSVersion = 1;
+    optHeader.MinorOSVersion = 0;
+    optHeader.MajorImageVersion = 0;
+    optHeader.MinorImageVersion = 0;
+    optHeader.MajorSubsystemVersion = 4;
+    optHeader.MinorSubsystemVersion = 0;
+    optHeader.Win32VersionValue = 0;
+    optHeader.SizeOfImage = 0;
+    optHeader.SizeOfHeaders = 0;
+    optHeader.Checksum = 0;
+    optHeader.Subsystem = IMAGE_SUBSYSTEM_WINDOWS_CUI;
+    optHeader.DLLCharacteristics = 0;
+    optHeader.SizeOfStackReserve = 0x100000; // "Max"
+    optHeader.SizeOfStackCommit = 0x1000; // "First" += 4K until "Max"
+    optHeader.SizeOfHeapReserve = 0x100000; // "Max"
+    optHeader.SizeOfHeapCommit = 0x1000; // "First" += 4K until "Max"
+    optHeader.LoaderFlags = 0;
+    optHeader.NumberOfRVAAndSizes = 0x10;
+    if( fwrite(&optHeader, 1, sizeof(optHeader), newPE->handle) != sizeof(optHeader) ) {
+      goto ReturnError;
+    }
+
+    ///TODO: Write .text section header
 
     return newPE;
 
