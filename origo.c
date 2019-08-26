@@ -868,7 +868,7 @@
   #define IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR 14
   #define IMAGE_DIRECTORY_ENTRY_RSVD 15
 
-  // PEOptDataDirectory and PEOptHeader based on
+  // PEOptDataDirectory and PEOptHeader32 based on
   // x86 Disassembly: Executable Files WikiBook
   // https://en.wikibooks.org/wiki/X86_Disassembly/Windows_Executable_Files#PE_Optional_Header
   ///TODO: Verify field are named according to Microsoft's documentation
@@ -890,7 +890,7 @@
 
   #define IMAGE_SIZEOF_SHORT_NAME 8
 
-  BEGIN_PACKEDSTRUCT(PESectionFileHeader)
+  BEGIN_PACKEDSTRUCT(PESectionHeader)
     DECL_PACKEDFIELD(char, Name[IMAGE_SIZEOF_SHORT_NAME])
     DECL_PACKEDFIELD(union{uint32_t PhysicalAddress; uint32_t VirtualSize;}, Misc)
     DECL_PACKEDFIELD(uint32_t, VirtualAddress)
@@ -901,7 +901,7 @@
     DECL_PACKEDFIELD(uint16_t, NumberOfRelocations)
     DECL_PACKEDFIELD(uint16_t, NumberOfLinenumbers)
     DECL_PACKEDFIELD(uint32_t, Characteristics)
-  END_PACKEDSTRUCT(PESectionFileHeader)
+  END_PACKEDSTRUCT(PESectionHeader)
 
   #define IMAGE_NT_OPTIONAL_HDR32_MAGIC 0x010B
   #define IMAGE_NT_OPTIONAL_HDR64_MAGIC 0x020B
@@ -2259,6 +2259,7 @@ int main( int argc, char* argv[] ) {
     uint32_t peSig = SIG_PEXE;
     COFFHeader coffHeader = {};
     PEOptHeader32 optHeader = {};
+    PESectionHeader sectHeader = {};
     uint8_t fileBuf[256];
     size_t bytesRead;
     size_t bytesWritten;
@@ -2363,6 +2364,7 @@ int main( int argc, char* argv[] ) {
     }
 
     ///TODO: Write .text section header
+    strcpy( sectHeader.Name, "text" );
 
     return newPE;
 
