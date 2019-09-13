@@ -788,6 +788,11 @@
  */
 
   // Windows Portable Executable object
+  typedef struct PEImportList {
+    char* dllName;
+    char* importName;
+  } PEImportList;
+
   typedef struct WinPE {
     FILE* handle;
     size_t codeStart;
