@@ -6,25 +6,17 @@
 #include <stdlib.h>
 
 #include "avl.h"
-#include "keyarray.h"
-
-/*
- *  Macro wrappers for compiler specific syntax
- */
-
-  #define BEGIN_PACKEDSTRUCT(structName)\
-  typedef struct structName {
-
-  #define DECL_PACKEDFIELD(typeSpec, fieldName) typeSpec fieldName __attribute__((packed));
-
-  #define END_PACKEDSTRUCT(structName)\
-  } structName __attribute__((packed));
 
 /*
  *  Global variables
  */
   int argCount;
   char** argVar;
+
+  typedef struct rstring rstring;
+
+  rstring* retFileName = NULL;
+  rstring* exeFileName = NULL;
 
 /*
  *  Token declarations
@@ -420,336 +412,687 @@
   rstring* rsubstrc( char* source, size_t sourceLength, size_t startPos, size_t endPos );
 
 /*
- *  Symbol table declarations
+ *  String Key Array definition/implementation
  */
 
-  typedef avl_tree_t SymTab;
+  #define DECLARE_STRING_KEYARRAY_TYPES(\
+      typeName, dataType )\
+  typedef struct typeName##Item {\
+    char* key;\
+    dataType data;\
+  } typeName##Item;\
+  \
+  typedef struct typeName {\
+    size_t reservedCount;\
+    size_t itemCount;\
+    typeName##Item* item;\
+  } typeName;
 
-  SymTab* NewSymTab( char* tableName );
-  void FreeSymTab( SymTab** symTab );
+  #define DECLARE_STRING_KEYARRAY_CREATE( funcName, listType )\
+  listType* funcName( size_t reserveCount ) {\
+      listType* newKeyArray = NULL;\
+    \
+    newKeyArray = (listType*)calloc(1, sizeof(listType));\
+    if( newKeyArray == NULL ) {\
+      goto ReturnError;\
+    }\
+    \
+    if( reserveCount ) {\
+      newKeyArray->item =\
+        (listType##Item*)calloc(reserveCount, sizeof(listType##Item));\
+      if( newKeyArray->item == NULL ) {\
+        goto ReturnError;\
+      }\
+      \
+      newKeyArray->reservedCount = reserveCount;\
+    }\
+    return newKeyArray;\
+  \
+  ReturnError:\
+    if( newKeyArray ) {\
+      if( newKeyArray->item ) {\
+        free( newKeyArray->item );\
+        newKeyArray->item = NULL;\
+      }\
+      free( newKeyArray );\
+      newKeyArray = NULL;\
+    }\
+    return NULL;\
+  }
 
-  void* Lookup( SymTab* table, char* name );
+  #define DECLARE_STRING_KEYARRAY_FREE( funcName, listType, freeDataFunc )\
+  void funcName( listType** keyList ) {\
+    size_t index;\
+    size_t itemCount;\
+    \
+    if( keyList && (*keyList) ) {\
+      itemCount = (*keyList)->itemCount;\
+      for( index = 0; index < itemCount; index++ ) {\
+        if( (*keyList)->item[index].key ) {\
+          free( (*keyList)->item[index].key );\
+        }\
+        freeDataFunc( &((*keyList)->item[index].data) );\
+      }\
+      \
+      free( (*keyList) );\
+      (*keyList) = NULL;\
+    }\
+  }
+
+  #define DECLARE_STRING_KEYARRAY_INSERT( funcName, listType, dataType )\
+  int funcName( listType* keyList, char* key, dataType* data ) {\
+    unsigned leftIndex;\
+    unsigned insertIndex;\
+    unsigned rightIndex;\
+    int result;\
+    char* newStrKey;\
+    size_t keyLen;\
+    unsigned prevCount;\
+    unsigned reservedCount;\
+    unsigned itemCount;\
+    listType##Item* item;\
+    \
+    if( !(keyList && key && data) ) {\
+      return 0;\
+    }\
+    \
+    keyLen = strlen(key);\
+    if( keyLen == 0 ) {\
+      return 0;\
+    }\
+    \
+    /* Grow list, if necessary */\
+    reservedCount = keyList->reservedCount;\
+    itemCount = keyList->itemCount;\
+    item = keyList->item;\
+    \
+    if( itemCount == reservedCount ) {\
+      prevCount = reservedCount;\
+      reservedCount += 8;\
+      if( prevCount > reservedCount ) {\
+        return 0;\
+      }\
+      \
+      item = realloc(item, reservedCount * sizeof(listType##Item));\
+      if( item == NULL ) {\
+        return 0;\
+      }\
+      keyList->reservedCount = reservedCount;\
+      keyList->item = item;\
+    }\
+    \
+    /* Search for insert position */\
+    leftIndex = 0;\
+    rightIndex = itemCount;\
+    insertIndex = itemCount / 2;\
+    \
+    while( leftIndex < rightIndex ) {\
+      result = strcmp(item[insertIndex].key, key);\
+      \
+      if( result == 0 ) {\
+        return 0;\
+      }\
+      \
+      if( result > 0 ) {\
+        rightIndex = insertIndex;\
+      } else {\
+        leftIndex = insertIndex + 1;\
+      }\
+      \
+      insertIndex = (leftIndex + rightIndex) / 2;\
+    }\
+    \
+    /* Attempt to allocate key string before going further */\
+    newStrKey = malloc(keyLen + 1);\
+    if( newStrKey == NULL ) {\
+      return 0;\
+    }\
+    strcpy( newStrKey, key );\
+    \
+    /* Move data past insertion point up, if necessary */\
+    memmove( &(item[insertIndex + 1]), &(item[insertIndex]),\
+        (itemCount - insertIndex) * sizeof(listType##Item) );\
+    \
+    /* Insert item */\
+    item[insertIndex].key = newStrKey;\
+    if( data ) {\
+      memcpy( &(item[insertIndex].data), data, sizeof(dataType) );\
+    }\
+    \
+    keyList->itemCount++;\
+    \
+    return 1;\
+  }
+
+  #define DECLARE_STRING_KEYARRAY_REMOVE( funcName, listType, freeDataFunc )\
+  void funcName( listType* keyList, char* key ) {\
+    unsigned leftIndex;\
+    unsigned rightIndex;\
+    unsigned removeIndex;\
+    int result;\
+    unsigned reservedCount;\
+    unsigned itemCount;\
+    listType##Item* item;\
+    \
+    if( !(keyList && keyList->item && key && (*key)) ) {\
+      return;\
+    }\
+    \
+    reservedCount = keyList->reservedCount;\
+    itemCount = keyList->itemCount;\
+    item = keyList->item;\
+    \
+    /* Search for insert position */\
+    leftIndex = 0;\
+    rightIndex = itemCount;\
+    removeIndex = itemCount / 2;\
+    \
+    while( leftIndex < rightIndex ) {\
+      result = strcmp(item[removeIndex].key, key);\
+      \
+      if( result == 0 ) {\
+        freeDataFunc( &(item[removeIndex].data) );\
+        if( item[removeIndex].key ) {\
+          free( item[removeIndex].key );\
+          item[removeIndex].key = NULL;\
+        }\
+        \
+        if( itemCount ) {\
+          itemCount--;\
+          \
+          memcpy( &(item[removeIndex]), &(item[removeIndex + 1]),\
+            (itemCount - removeIndex) * sizeof(listType##Item) );\
+          \
+          keyList->itemCount = itemCount;\
+        }\
+        \
+        memset( &(item[itemCount]), 0, sizeof(listType##Item) );\
+        \
+        return;\
+      }\
+      \
+      if( result > 0 ) {\
+        rightIndex = removeIndex;\
+      } else {\
+        leftIndex = removeIndex + 1;\
+      }\
+      \
+      removeIndex = (leftIndex + rightIndex) / 2;\
+    }\
+  }
+
+  #define DECLARE_STRING_KEYARRAY_RETRIEVE( funcName, listType, dataType )\
+  int funcName( listType* keyList, char* key, dataType* destData ) {\
+    unsigned leftIndex;\
+    unsigned rightIndex;\
+    unsigned retrieveIndex;\
+    int result;\
+    unsigned reservedCount;\
+    unsigned itemCount;\
+    listType##Item* item;\
+    \
+    if( !(keyList && keyList->item && key && (*key) && destData) ) {\
+      return 0;\
+    }\
+    \
+    reservedCount = keyList->reservedCount;\
+    itemCount = keyList->itemCount;\
+    item = keyList->item;\
+    \
+    /* Search for item */\
+    leftIndex = 0;\
+    rightIndex = itemCount;\
+    retrieveIndex = itemCount / 2;\
+    \
+    while( leftIndex < rightIndex ) {\
+      result = strcmp(item[retrieveIndex].key, key);\
+      \
+      if( result == 0 ) {\
+        memcpy( destData, &(item[retrieveIndex].data), sizeof(dataType) );\
+        return 1;\
+      }\
+      \
+      if( result > 0 ) {\
+        rightIndex = retrieveIndex;\
+      } else {\
+        leftIndex = retrieveIndex + 1;\
+      }\
+      \
+      retrieveIndex = (leftIndex + rightIndex) / 2;\
+    }\
+    \
+    return 0;\
+  }
+
+  #define DECLARE_STRING_KEYARRAY_RELEASEUNUSED( funcName, listType )\
+  void funcName( listType* keyList ) {\
+    listType##Item* item;\
+    \
+    if( keyList == NULL ) {\
+      return;\
+    }\
+    \
+    if( keyList->item && keyList->itemCount ) {\
+      /* Resize to remove reserved space*/\
+      item = realloc(keyList->item,\
+        keyList->itemCount * sizeof(listType##Item));\
+      if( item ) {\
+        keyList->item = item;\
+        keyList->reservedCount = keyList->itemCount;\
+      }\
+    } else {\
+      /* Deallocate */\
+      keyList->reservedCount = 0;\
+      keyList->itemCount = 0;\
+      if( keyList->item ) {\
+        free( keyList->item );\
+        keyList->item = NULL;\
+      }\
+    }\
+  }
+
+  #define DECLARE_STRING_KEYARRAY_COPY( funcName, listType, dataType,\
+      copyDataFunc, freeDataFunc )\
+  listType* funcName( listType* sourceList ) {\
+    listType* newCopy = NULL;\
+    listType##Item* sourceItem = NULL;\
+    size_t reservedCount = 0;\
+    size_t itemCount = 0;\
+    char* keyCopy;\
+    size_t keyLen;\
+    size_t index;\
+    \
+    if( sourceList == NULL ) {\
+      return NULL;\
+    }\
+    \
+    /* Attempt to allocate list object */\
+    newCopy = calloc(1, sizeof(listType));\
+    if( newCopy == NULL ) {\
+      goto ReturnError;\
+    }\
+    \
+    /* Initialize important variables */\
+    reservedCount = sourceList->reservedCount;\
+    itemCount = sourceList->itemCount;\
+    sourceItem = sourceList->item;\
+    \
+    /* A list with no items is valid */\
+    if( !(reservedCount && itemCount && sourceItem) ) {\
+      return newCopy;\
+    }\
+    \
+    /* Copy data, then copy the string keys */\
+    newCopy->item = malloc(reservedCount * sizeof(listType##Item));\
+    if( newCopy->item == NULL ) {\
+      goto ReturnError;\
+    }\
+    \
+    for( index = 0; index < itemCount; index++ ) {\
+      copyDataFunc( &(newCopy->item[index].data),\
+          &(sourceItem[index].data) );\
+      \
+      keyLen = strlen(sourceItem[index].key);\
+      keyCopy = malloc(keyLen + 1);\
+      if( keyCopy == NULL ) {\
+        goto ReturnError;\
+      }\
+      strcpy( keyCopy, sourceItem[index].key );\
+      \
+      newCopy->item[index].key = keyCopy;\
+    }\
+    \
+    newCopy->reservedCount = reservedCount;\
+    newCopy->itemCount = itemCount;\
+    \
+    return newCopy;\
+    \
+  ReturnError:\
+    if( newCopy == NULL ) {\
+      return NULL;\
+    }\
+    \
+    if( newCopy->item ) {\
+      for( index = 0; index < itemCount; index++ ) {\
+        freeDataFunc( &(newCopy->item[index].data) );\
+        \
+        keyCopy = newCopy->item[index].key;\
+        if( keyCopy ) {\
+          free( keyCopy );\
+          keyCopy = NULL;\
+        }\
+      }\
+    }\
+    \
+    free( newCopy );\
+    newCopy = NULL;\
+    \
+    return NULL;\
+  }
+
+/*
+ *  Unsigned Key Array definition/implementation
+ */
+
+  #define DECLARE_UINT_KEYARRAY_TYPES(\
+      typeName, dataType )\
+  typedef struct typeName##Item {\
+    unsigned key;\
+    dataType data;\
+  } typeName##Item;\
+  \
+  typedef struct typeName {\
+    size_t reservedCount;\
+    size_t itemCount;\
+    typeName##Item* item;\
+  } typeName;
+
+  #define DECLARE_UINT_KEYARRAY_CREATE( funcName, listType )\
+  listType* funcName( size_t reserveCount ) {\
+    listType* newKeyArray = NULL;\
+    \
+    newKeyArray = (listType*)calloc(1, sizeof(listType));\
+    if( newKeyArray == NULL ) {\
+      goto ReturnError;\
+    }\
+    \
+    if( reserveCount ) {\
+      newKeyArray->item =\
+        (listType##Item*)calloc(reserveCount, sizeof(listType##Item));\
+      if( newKeyArray->item == NULL ) {\
+        goto ReturnError;\
+      }\
+      \
+      newKeyArray->reservedCount = reserveCount;\
+    }\
+    return newKeyArray;\
+    \
+  ReturnError:\
+    if( newKeyArray ) {\
+      if( newKeyArray->item ) {\
+        free( newKeyArray->item );\
+        newKeyArray->item = NULL;\
+      }\
+      free( newKeyArray );\
+      newKeyArray = NULL;\
+    }\
+    return NULL;\
+  }
+
+  #define DECLARE_UINT_KEYARRAY_FREE( funcName, listType, freeDataFunc )\
+  void funcName( listType** keyList ) {\
+    size_t index;\
+    size_t itemCount;\
+    \
+    if( keyList && (*keyList) ) {\
+      itemCount = (*keyList)->itemCount;\
+      for( index = 0; index < itemCount; index++ ) {\
+        freeDataFunc( &((*keyList)->item[index].data) );\
+      }\
+      \
+      free( (*keyList) );\
+      (*keyList) = NULL;\
+    }\
+  }
+
+  #define DECLARE_UINT_KEYARRAY_INSERT( funcName, listType, dataType )\
+  int funcName( listType* keyList,\
+      unsigned key, dataType* data ) {\
+    unsigned leftIndex;\
+    unsigned insertIndex;\
+    unsigned rightIndex;\
+    unsigned prevCount;\
+    unsigned reservedCount;\
+    unsigned itemCount;\
+    listType##Item* item;\
+    \
+    if( !(keyList && data) ) {\
+      return 0;\
+    }\
+    \
+    /* Grow list, if necessary */\
+    reservedCount = keyList->reservedCount;\
+    itemCount = keyList->itemCount;\
+    item = keyList->item;\
+    \
+    if( itemCount == reservedCount ) {\
+      prevCount = reservedCount;\
+      reservedCount += 8;\
+      if( prevCount > reservedCount ) {\
+        return 0;\
+      }\
+      \
+      item = realloc(item, reservedCount * sizeof(listType##Item));\
+      if( item == NULL ) {\
+        return 0;\
+      }\
+      keyList->reservedCount = reservedCount;\
+      keyList->item = item;\
+    }\
+    \
+    /* Search for insert position */\
+    leftIndex = 0;\
+    rightIndex = itemCount;\
+    insertIndex = itemCount / 2;\
+    \
+    while( leftIndex < rightIndex ) {\
+      if( item[insertIndex].key == key ) {\
+        return 0;\
+      }\
+      \
+      if( item[insertIndex].key > key ) {\
+        rightIndex = insertIndex;\
+      } else {\
+        leftIndex = insertIndex + 1;\
+      }\
+      \
+      insertIndex = (leftIndex + rightIndex) / 2;\
+    }\
+    \
+    /* Move data past insertion point up, if necessary */\
+    memmove( &(item[insertIndex + 1]), &(item[insertIndex]),\
+        (itemCount - insertIndex) * sizeof(listType##Item) );\
+    \
+    /* Insert item */\
+    item[insertIndex].key = key;\
+    if( data ) {\
+      memcpy( &(item[insertIndex].data), data, sizeof(dataType) );\
+    }\
+    \
+    keyList->itemCount++;\
+    \
+    return 1;\
+  }
+
+  #define DECLARE_UINT_KEYARRAY_REMOVE( funcName, listType, freeDataFunc )\
+  void funcName( listType* keyList, unsigned key ) {\
+    unsigned leftIndex;\
+    unsigned rightIndex;\
+    unsigned removeIndex;\
+    unsigned reservedCount;\
+    unsigned itemCount;\
+    listType##Item* item;\
+    \
+    if( !(keyList && keyList->item) ) {\
+      return;\
+    }\
+    \
+    reservedCount = keyList->reservedCount;\
+    itemCount = keyList->itemCount;\
+    item = keyList->item;\
+    \
+    /* Search for insert position */\
+    leftIndex = 0;\
+    rightIndex = itemCount;\
+    removeIndex = itemCount / 2;\
+    \
+    while( leftIndex < rightIndex ) {\
+      if( item[removeIndex].key == key ) {\
+        freeDataFunc( &(item[removeIndex].data) );\
+        \
+        if( itemCount ) {\
+          itemCount--;\
+          \
+          memcpy( &(item[removeIndex]), &(item[removeIndex + 1]),\
+            (itemCount - removeIndex) * sizeof(listType##Item) );\
+          \
+          keyList->itemCount = itemCount;\
+        }\
+        \
+        memset( &(item[itemCount]), 0, sizeof(listType##Item) );\
+        \
+        return;\
+      }\
+      \
+      if( item[removeIndex].key > key ) {\
+        rightIndex = removeIndex;\
+      } else {\
+        leftIndex = removeIndex + 1;\
+      }\
+      \
+      removeIndex = (leftIndex + rightIndex) / 2;\
+    }\
+  }
+
+  #define DECLARE_UINT_KEYARRAY_RETRIEVE( funcName, listType, dataType )\
+  int funcName( listType* keyList, unsigned key,\
+      dataType* destData ) {\
+    unsigned leftIndex;\
+    unsigned rightIndex;\
+    unsigned retrieveIndex;\
+    unsigned reservedCount;\
+    unsigned itemCount;\
+    listType##Item* item;\
+    \
+    if( !(keyList && keyList->item && destData) ) {\
+      return 0;\
+    }\
+    \
+    reservedCount = keyList->reservedCount;\
+    itemCount = keyList->itemCount;\
+    item = keyList->item;\
+    \
+    /* Search for insert position */\
+    leftIndex = 0;\
+    rightIndex = itemCount;\
+    retrieveIndex = itemCount / 2;\
+    \
+    while( leftIndex < rightIndex ) {\
+      if( item[retrieveIndex].key == key ) {\
+        memcpy( destData, &(item[retrieveIndex].data), sizeof(dataType) );\
+        return 1;\
+      }\
+      \
+      if( item[retrieveIndex].key > key ) {\
+        rightIndex = retrieveIndex;\
+      } else {\
+        leftIndex = retrieveIndex + 1;\
+      }\
+      \
+      retrieveIndex = (leftIndex + rightIndex) / 2;\
+    }\
+    \
+    return 0;\
+  }
+
+  #define DECLARE_UINT_KEYARRAY_RELEASEUNUSED( funcName, listType )\
+  void funcName( listType* keyList ) {\
+    listType##Item* item;\
+    \
+    if( keyList == NULL ) {\
+      return;\
+    }\
+    \
+    if( keyList->item && keyList->itemCount ) {\
+      /* Resize to remove reserved space */\
+      item = realloc(keyList->item,\
+        keyList->itemCount * sizeof(listType##Item));\
+      if( item ) {\
+        keyList->item = item;\
+        keyList->reservedCount = keyList->itemCount;\
+      }\
+    } else {\
+      /* Deallocate */\
+      keyList->reservedCount = 0;\
+      keyList->itemCount = 0;\
+      if( keyList->item ) {\
+        free( keyList->item );\
+        keyList->item = NULL;\
+      }\
+    }\
+  }
+
+  #define DECLARE_UINT_KEYARRAY_COPY( funcName, listType, dataType,\
+      copyDataFunc, freeDataFunc )\
+  listType* funcName( listType* sourceList ) {\
+    listType* newCopy = NULL;\
+    listType##Item* sourceItem = NULL;\
+    size_t reservedCount = 0;\
+    size_t itemCount = 0;\
+    size_t index;\
+    \
+    if( sourceList == NULL ) {\
+      return NULL;\
+    }\
+    \
+    /* Attempt to allocate list object */\
+    newCopy = calloc(1, sizeof(listType));\
+    if( newCopy == NULL ) {\
+      goto ReturnError;\
+    }\
+    \
+    /* Initialize important variables */\
+    reservedCount = sourceList->reservedCount;\
+    itemCount = sourceList->itemCount;\
+    sourceItem = sourceList->item;\
+    \
+    /* A list with no items is valid */\
+    if( !(reservedCount && itemCount && sourceItem) ) {\
+      return newCopy;\
+    }\
+    \
+    /* Copy data, then copy the Uint keys */\
+    newCopy->item = malloc(reservedCount * sizeof(listType##Item));\
+    if( newCopy->item == NULL ) {\
+      goto ReturnError;\
+    }\
+    \
+    for( index = 0; index < itemCount; index++ ) {\
+      copyDataFunc( &(newCopy->item[index].data),\
+          &(sourceItem[index].data) );\
+      \
+      newCopy->item[index].key = sourceItem[index].key;\
+    }\
+    \
+    newCopy->reservedCount = reservedCount;\
+    newCopy->itemCount = itemCount;\
+    \
+    return newCopy;\
+    \
+  ReturnError:\
+    if( newCopy == NULL ) {\
+      return NULL;\
+    }\
+    \
+    if( newCopy->item ) {\
+      for( index = 0; index < itemCount; index++ ) {\
+        freeDataFunc( &(newCopy->item[index].data) );\
+      }\
+    }\
+    \
+    free( newCopy );\
+    newCopy = NULL;\
+    \
+    return NULL;\
+  }
+
+/*
+ *  Symbol table declarations
+ */
 
 /*
  *  Symbol declarations
  */
-
-  typedef enum _SymType {
-    funcDecl = 1,
-    funcForward,
-    funcImport
-    // ...
-  } SymType;
-
-  // Function/Method parameter list
-  typedef struct TypeSpec TypeSpec;
-
-  typedef struct Param {
-    // Parameter specifiers
-    TypeSpec* typeSpec;
-    size_t    paramOfs;
-  } Param;
-
-  // [<'@' | '#'>]baseType['[' CONSTEXPR[',' ...] ']'] ['(' [PARAMDECL[',' ...]] ')']
-  typedef struct TypeSpec {
-    // Optional name
-    char*      name;
-    // Optional Pointer specifiers: [Far] Pointer, [Far] Reference
-    unsigned   pointerType;
-    // Required simple/complex type
-    unsigned   baseType;
-    size_t     typeSize;
-    unsigned   typeID;
-    // Optional array specifier
-    size_t     dimCount;
-    unsigned*  dims;
-    size_t     dimOfs;
-    // Function parameter list
-    size_t     paramCount;
-    Param*     param;
-    // Default value
-    unsigned   initType;
-    size_t     initSize;
-    uint8_t*   initVal;
-  } TypeSpec;
-
-  //  enum [BASETYPE] IDENT
-  //    [IDENT[, ...] ['=' CONSTEXPR]]
-  //  end
-  typedef struct EnumField {
-    char*    name;
-    size_t   valSize;
-    uint8_t* fieldVal;
-  } EnumField;
-
-  typedef struct EnumSym {
-    // Common Symbol Entry fields
-    char*      name;
-    unsigned   symType;
-    // Optional simple type
-    unsigned   baseType;
-    size_t     typeSize;
-    // enum Fields
-    size_t     fieldCount;
-    EnumField* field;
-  } EnumSym;
-
-  //  union IDENT => UNIONNAME
-  //    [TYPESPEC IDENT[, ...]]
-  //  end
-  typedef struct UnionField {
-    char*     fieldName;
-    TypeSpec* typeSpec;
-    unsigned  fieldOfs;
-  } UnionField;
-
-  typedef struct UnionSym {
-    // Common Symbol Entry fields
-    char*       name;
-    unsigned    symType;
-    // Union fields
-    size_t      fieldCount;
-    UnionField* field;
-  } UnionSym;
-
-  //  struct IDENT => STRUCTNAME
-  //    [TYPESPEC IDENT[, ...] ['=' CONSTEXPR]]
-  //    [union '(' TYPESPEC[, ...] ')' IDENT[, ...]]
-  //  end
-  typedef struct StructField {
-    char*     fieldName;
-    TypeSpec* typeSpec;
-    unsigned  fieldOfs;
-    // Optional init value
-    size_t    initSize;
-    uint8_t*  initVal;
-  } StructField;
-
-  typedef struct StructSym {
-    // Common Symbol Entry fields
-    char*        name;
-    unsigned     symType;
-    // Union fields
-    size_t       fieldCount;
-    StructField* field;
-  } StructSym;
-
-  //  type TYPESPEC IDENT ['=' CONSTEXPR][, ...]
-  typedef struct TypeSym {
-    // Common Symbol Entry fields
-    char*        name;
-    unsigned     symType;
-    // Type Specifier
-    TypeSpec* typeSpec;
-    // Optional init value
-    size_t    initSize;
-    uint8_t*  initVal;
-  } TypeSym;
-
-  //  const
-  //    [TYPESPEC IDENT '=' CONSTEXPR[, ...]]
-  //  end
-  typedef struct ConstSym {
-    // Common Symbol Entry fields
-    char*     name;
-    unsigned  symType;
-    // Variable specifiers
-    TypeSpec* typeSpec;
-    size_t    constOfs;
-    // Optional initialized value
-    size_t    initSize;
-    uint8_t*  initVal;
-  } ConstSym;
-
-  //  var
-  //    [TYPESPEC IDENT['=' CONSTEXPR][, ...]]
-  //  end
-  typedef struct VarSym {
-    // Common Symbol Entry fields
-    char*     name;
-    unsigned  symType;
-    // Variable specifiers
-    TypeSpec* typeSpec;
-    size_t    varOfs;
-    // Optional initialized value
-    size_t    initSize;
-    uint8_t*  initVal;
-  } VarSym;
-
-  // Function/Method cdecl, stdcall, fastcall, thiscall, etc specifier
-  typedef struct CallSpec {
-    // Call stack specifier
-    unsigned  callType;
-    // Left to right, right to left, etc
-    unsigned  paramOrder;
-    // Maximum parameters allowed by count and/or by size
-    size_t    maxParams;
-    size_t    stackLimit;
-    // Destination register or stack parameter specifiers
-    size_t    destCount;
-    unsigned* paramDest;
-    // Default frame type: esp or ebp
-    unsigned  frameType;
-  } CallSpec;
-
-  // [declare] func [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')' ... end
-  // import func [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')'
-  //   from DLLNAMESTR [as ACTUALNAMESTR]
-  typedef struct FuncSym {
-    // Common Symbol Entry fields
-    unsigned  symType;
-    char*     name;
-    // Function specifiers
-    CallSpec* callSpec;
-    TypeSpec* typeSpec;
-    size_t    funcOfs;
-    // Function parameter list
-    size_t    paramCount;
-    Param*    funcParam;
-    // Optional import specifiers
-    char*     dllName;
-    char*     linkName;
-    // Optional initialized value
-    unsigned  initType;
-    size_t    initSize;
-    uint8_t*  initVal;
-  } FuncSym;
-
-  //  object IDENT
-  //    [inherits OBJNAME[, ...]]
-  //  [<public | mutable>]
-  //    [TYPESPEC IDENT['=' CONSTEXPR][, ...]]
-  //  end
-  typedef struct ObjectDescendant {
-    char* descendantName;
-  } ObjectDescendant;
-
-  typedef struct MemberSym {
-    char*     memberName;
-    size_t    memberOfs;
-    unsigned  memberScope;
-    // Descendant list
-    size_t            descendantCount;
-    ObjectDescendant* descendant;
-    // Member variables
-    TypeSpec* typeSpec;
-    size_t    memberOfs;
-    // Optional initialized value
-    size_t    initSize;
-    uint8_t*  initVal;
-  } MemberSym;
-
-  typedef struct ObjectSym {
-    // Common Symbol Entry fields
-    char*      name;
-    unsigned   symType;
-    // Object specifiers
-    unsigned   objectID;
-    // Member specifiers
-    size_t     memberCount;
-    MemberSym* member;
-  } ObjectSym;
-
-  //  ctor OBJNAME.IDENT '(' [MEMBERNAME[, ...]] ')'
-  typedef struct MemberParam {
-    char*     name;
-    // Optional initialized value
-    size_t    initSize;
-    uint8_t*  initVal;
-  } MemberParam;
-
-  typedef struct CtorSym {
-    // Common Symbol Entry fields
-    char*        name;
-    unsigned     symType;
-    // Offset value
-    size_t       ctorOfs;
-    // Name specifiers
-    char*        objectName;
-    char*        initName;
-    // Member parameter list
-    size_t       memberCount;
-    MemberParam* memberInit;
-  } CtorSym;
-
-  //  dtor OBJNAME '(' ')'
-  typedef struct DtorSym {
-    // Common Symbol Entry fields
-    char*        name;
-    unsigned     symType;
-    // Offset value
-    size_t       dtorOfs;
-    // Name specifiers
-    char*        objectName;
-  } DtorSym;
-
-  //  abstract <OBJNAME | IDENT [implements OBJNAME[, ...]]>
-  //      [inherits <ABSNAME | IFACENAME>[, ...]]
-  //    [method [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')']
-  //  end
-  typedef struct IFaceName {
-    char* ifaceName;
-  } IFaceName;
-
-  typedef struct MethodSym MethodSym;
-
-  typedef struct AbstractSym {
-    // Common Symbol Entry fields
-    char*        name;
-    unsigned     symType;
-    // Inherited Abstract/Interfaces
-    size_t       ifaceCount;
-    IFaceName*   inheritedIFace;
-    // Method declarations
-    // ...
-  } AbstractSym;
-
-  typedef struct InterfaceSym {
-    // Common Symbol Entry fields
-    char*        name;
-    unsigned     symType;
-    // Inherited Abstract/Interfaces
-    size_t       ifaceCount;
-    IFaceName*   inheritedIFace;
-    // Method declarations
-    // ...
-  } InterfaceSym;
-
-  //  method [CALLSPEC] [TYPESPEC]
-  //      <ABSNAME | IFACENAME>.METHODNAME '(' [PARAMDECL[, ...]] ')'
-  typedef struct MethodSym {
-    // Common Symbol Entry fields
-    unsigned  symType;
-    char*     name;
-    // Function specifiers
-    CallSpec* callSpec;
-    TypeSpec* typeSpec;
-    size_t    funcOfs;
-    // Method parameter list
-    size_t    paramCount;
-    Param*    methodParam;
-    // Optional initialized value
-    unsigned  initType;
-    size_t    initSize;
-    uint8_t*  initVal;
-  } MethodSym;
-
-  bool DeclareParam( FuncSym* funcSym, TypeSpec* typeSpec );
-
-  bool DeclareVar( SymTab* symTab, char* name, TypeSpec* typeSpec,
-    size_t varOffset, unsigned initType, void* initVal );
-
-  bool DeclareFunc( SymTab* symTab, char* name, CallSpec* callSpec,
-    TypeSpec* typeSpec, Param* funcParam, size_t paramCount, unsigned initType,
-    void* initVal );
-
-  bool DeclareLabel( SymTab* symTab, char* name,
-    unsigned targetType, size_t targetOfs );
-
-  bool DeclareObject( SymTab* symTab, char* name );
-  bool InheritObject( SymTab* symTab, char* objectName, char* baseObjectName );
-  bool DeclareMember( SymTab* symTab, char* objectName, char* memberName,
-    TypeSpec* typeSpec, unsigned initType, void* initVal );
 
 /*
  *  Lexer declarations
@@ -784,402 +1127,12 @@
   unsigned ReadOperator( RetFile* source );
 
 /*
- *  Windows PE declarations
- */
-
-  // Windows Portable Executable object
-  typedef struct PEImportList {
-    char* dllName;
-    char* importName;
-  } PEImportList;
-
-  typedef struct WinPE {
-    FILE* handle;
-    size_t codeStart;
-    size_t codeEntry;
-    unsigned sizeFlag;
-    uint8_t sizePrefix;
-  } WinPE;
-
-  // MS-DOS stub file header
-  #define SIG_MZEXE (((uint16_t)'M' << 8) | 'Z')
-
-  // MZExeHeader based on DOS_Header from
-  // x86_Disassembly: Executable Files WikiBook
-  // https://en.wikibooks.org/wiki/X86_Disassembly/Windows_Executable_Files#MS-DOS_header
-  ///TODO: Verify field are named according to Microsoft's documentation
-  BEGIN_PACKEDSTRUCT(MZHeader)
-    DECL_PACKEDFIELD(uint16_t, signature) // 'MZ', SIG_MZEXE
-    DECL_PACKEDFIELD(uint16_t, lastSize)
-    DECL_PACKEDFIELD(uint16_t, nblocks)
-    DECL_PACKEDFIELD(uint16_t, nreloc)
-    DECL_PACKEDFIELD(uint16_t, hdrsize)
-    DECL_PACKEDFIELD(uint16_t, minalloc)
-    DECL_PACKEDFIELD(uint16_t, maxalloc)
-    DECL_PACKEDFIELD(uint16_t, initSS)
-    DECL_PACKEDFIELD(uint16_t, initSP)
-    DECL_PACKEDFIELD(uint16_t, checksum)
-    DECL_PACKEDFIELD(uint16_t, entryIP)
-    DECL_PACKEDFIELD(uint16_t, entryCS)
-    DECL_PACKEDFIELD(uint16_t, relocpos)
-    DECL_PACKEDFIELD(uint16_t, noverlay)
-    DECL_PACKEDFIELD(uint16_t, reserved1[4])
-    DECL_PACKEDFIELD(uint16_t, oemID)
-    DECL_PACKEDFIELD(uint16_t, oemInfo)
-    DECL_PACKEDFIELD(uint16_t, reserved2[10])
-    DECL_PACKEDFIELD(uint32_t, e_lfanew) // Offset to PE signature
-  END_PACKEDSTRUCT(MZHeader)
-
-  // COFF file header
-
-  #define CM_I386 0x14C
-
-  // From https://en.wikibooks.org/wiki/X86_Disassembly/Windows_Executable_Files#COFF_Header
-  ///TODO: Verify definitions are named according to Microsoft's documentation
-  #define IMAGE_FILE_EXECUTABLE_IMAGE 0x0002
-  #define IMAGE_FILE_32BIT_MACHINE    0x0100
-
-  // COFFHeader based on x86 Disassembly: Executable Files WikiBook
-  // https://en.wikibooks.org/wiki/X86_Disassembly/Windows_Executable_Files#COFF_Header
-  ///TODO: Verify field are named according to Microsoft's documentation
-  BEGIN_PACKEDSTRUCT(COFFHeader)
-    DECL_PACKEDFIELD(uint16_t, Machine)
-    DECL_PACKEDFIELD(uint16_t, NumberOfSections)
-    DECL_PACKEDFIELD(uint32_t, TimeDateStamp)
-    DECL_PACKEDFIELD(uint32_t, PointerToSymbolTable)
-    DECL_PACKEDFIELD(uint32_t, NumberOfSymbols)
-    DECL_PACKEDFIELD(uint16_t, SizeOfOptionalHeader)
-    DECL_PACKEDFIELD(uint16_t, Characteristics)
-  END_PACKEDSTRUCT(COFFHeader)
-
-  // Windows PE optional file header
-
-  #define SIG_PEXE (((uint32_t)'E' << 8) | 'P')
-
-  #define IMAGE_DIRECTORY_ENTRY_EXPORT 0
-  #define IMAGE_DIRECTORY_ENTRY_IMPORT 1
-  #define IMAGE_DIRECTORY_ENTRY_RESOURCE 2
-  #define IMAGE_DIRECTORY_ENTRY_EXCEPTION 3
-  #define IMAGE_DIRECTORY_ENTRY_SECURITY 4
-  #define IMAGE_DIRECTORY_ENTRY_BASERELOC 5
-  #define IMAGE_DIRECTORY_ENTRY_DEBUG 6
-  #define IMAGE_DIRECTORY_ENTRY_ARCHITECTURE 7
-  #define IMAGE_DIRECTORY_ENTRY_GLOBALPTR 8
-  #define IMAGE_DIRECTORY_ENTRY_TLS 9
-  #define IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG 10
-  #define IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT 11
-  #define IMAGE_DIRECTORY_ENTRY_IAT 12
-  #define IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT 13
-  #define IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR 14
-  #define IMAGE_DIRECTORY_ENTRY_RSVD 15
-
-  // PEOptDataDirectory and PEOptHeader32 based on
-  // x86 Disassembly: Executable Files WikiBook
-  // https://en.wikibooks.org/wiki/X86_Disassembly/Windows_Executable_Files#PE_Optional_Header
-  ///TODO: Verify field are named according to Microsoft's documentation
-  BEGIN_PACKEDSTRUCT(PEOptDataDirectory)
-    DECL_PACKEDFIELD(uint32_t, VirtualAddress)
-    DECL_PACKEDFIELD(uint32_t, Size)
-  END_PACKEDSTRUCT(PEOptDataDirectory)
-
-  #define IMAGE_SCN_CNT_CODE 0x00000020
-  #define IMAGE_SCN_CNT_INITIALIZED_DATA 0x00000040
-  #define IMAGE_SCN_CNT_UNINITIALIZED_DATA 0x00000080
-  #define IMAGE_SCN_ALIGN_1BYTES 0x00100000
-  #define IMAGE_SCN_ALIGN_16BYTES 0x00500000
-  #define IMAGE_SCN_MEM_DISCARDABLE 0x02000000
-  #define IMAGE_SCN_MEM_SHARED 0x10000000
-  #define IMAGE_SCN_MEM_EXECUTE 0x20000000
-  #define IMAGE_SCN_MEM_READ 0x40000000
-  #define IMAGE_SCN_MEM_WRITE 0x80000000
-
-  #define IMAGE_SIZEOF_SHORT_NAME 8
-
-  BEGIN_PACKEDSTRUCT(PESectionHeader)
-    DECL_PACKEDFIELD(char, Name[IMAGE_SIZEOF_SHORT_NAME])
-    DECL_PACKEDFIELD(union{uint32_t PhysicalAddress; uint32_t VirtualSize;}, Misc)
-    DECL_PACKEDFIELD(uint32_t, VirtualAddress)
-    DECL_PACKEDFIELD(uint32_t, SizeOfRawData)
-    DECL_PACKEDFIELD(uint32_t, PointerToRawData)
-    DECL_PACKEDFIELD(uint32_t, PointerToRelocations)
-    DECL_PACKEDFIELD(uint32_t, PointerToLinenumbers)
-    DECL_PACKEDFIELD(uint16_t, NumberOfRelocations)
-    DECL_PACKEDFIELD(uint16_t, NumberOfLinenumbers)
-    DECL_PACKEDFIELD(uint32_t, Characteristics)
-  END_PACKEDSTRUCT(PESectionHeader)
-
-  #define IMAGE_NT_OPTIONAL_HDR32_MAGIC 0x010B
-  #define IMAGE_NT_OPTIONAL_HDR64_MAGIC 0x020B
-  #define IMAGE_ROM_OPTIONAL_HDR_MAGIC  0x0107
-
-  #define IMAGE_SUBSYSTEM_WINDOWS_GUI 2
-  #define IMAGE_SUBSYSTEM_WINDOWS_CUI 3
-
-  BEGIN_PACKEDSTRUCT(PEOptHeader32)
-    DECL_PACKEDFIELD(uint16_t, signature)
-    DECL_PACKEDFIELD(uint8_t,  MajorLinkedVersion)
-    DECL_PACKEDFIELD(uint8_t,  MinorLinkedVersion)
-    DECL_PACKEDFIELD(uint32_t, SizeOfCode)
-    DECL_PACKEDFIELD(uint32_t, SizeOfInitializedData)
-    DECL_PACKEDFIELD(uint32_t, SizeOfUninitializedData)
-    DECL_PACKEDFIELD(uint32_t, AddressOfEntryPoint) // Entry point RVA
-    DECL_PACKEDFIELD(uint32_t, BaseOfCode)
-    DECL_PACKEDFIELD(uint32_t, BaseOfData)
-    DECL_PACKEDFIELD(uint32_t, ImageBase) // Default App: 0x00400000
-    DECL_PACKEDFIELD(uint32_t, SectionAlignment) // Default: 4096 (Page)
-    DECL_PACKEDFIELD(uint32_t, FileAlignment) // Default: 512
-    DECL_PACKEDFIELD(uint16_t, MajorOSVersion)
-    DECL_PACKEDFIELD(uint16_t, MinorOSVersion)
-    DECL_PACKEDFIELD(uint16_t, MajorImageVersion)
-    DECL_PACKEDFIELD(uint16_t, MinorImageVersion)
-    DECL_PACKEDFIELD(uint16_t, MajorSubsystemVersion)
-    DECL_PACKEDFIELD(uint16_t, MinorSubsystemVersion)
-    DECL_PACKEDFIELD(uint32_t, Win32VersionValue)
-    DECL_PACKEDFIELD(uint32_t, SizeOfImage)
-    DECL_PACKEDFIELD(uint32_t, SizeOfHeaders)
-    DECL_PACKEDFIELD(uint32_t, Checksum)
-    DECL_PACKEDFIELD(uint16_t, Subsystem)
-    DECL_PACKEDFIELD(uint16_t, DLLCharacteristics)
-    DECL_PACKEDFIELD(uint32_t, SizeOfStackReserve) // "Max"
-    DECL_PACKEDFIELD(uint32_t, SizeOfStackCommit) // "First" += 4K until "Max"
-    DECL_PACKEDFIELD(uint32_t, SizeOfHeapReserve) // "Max"
-    DECL_PACKEDFIELD(uint32_t, SizeOfHeapCommit) // "First" += 4K until "Max"
-    DECL_PACKEDFIELD(uint32_t, LoaderFlags)
-    DECL_PACKEDFIELD(uint32_t, NumberOfRVAAndSizes)
-    DECL_PACKEDFIELD(PEOptDataDirectory, DataDirectory[16])
-  END_PACKEDSTRUCT(PEOptHeader32)
-
-  // Import directory
-  BEGIN_PACKEDSTRUCT(PEImportDescriptor)
-    DECL_PACKEDFIELD(uint32_t*, OriginalFirstThunk)
-    DECL_PACKEDFIELD(uint32_t, TimeDateStamp)
-    DECL_PACKEDFIELD(uint32_t, ForwarderChain)
-    DECL_PACKEDFIELD(uint32_t, Name)
-    DECL_PACKEDFIELD(uint32_t*, FirstThunk)
-  END_PACKEDSTRUCT(PEImportDescriptor)
-
-  BEGIN_PACKEDSTRUCT(PEImportByName)
-    DECL_PACKEDFIELD(uint16_t, Hint)
-    DECL_PACKEDFIELD(uint8_t, Name[1])
-  END_PACKEDSTRUCT(PEImportByName)
-
-  // Windows Portable Executable functions
-  WinPE* CreatePE( char* fileName );
-  void ClosePE( WinPE** winpe );
-
-/*
- *  Code generator declarations
- */
-
-  typedef enum x86Field {
-    hasPrefix1 = 1 << 16,
-    hasPrefix2 = 1 << 15,
-    hasPrefix3 = 1 << 14,
-    hasPrefix4 = 1 << 13,
-
-    hasOpcode1 = 1 << 12,
-    hasOpcode2 = 1 << 11,
-    hasOpcode3 = 1 << 10,
-
-    hasModRM   = 1 << 9,
-
-    hasSIB     = 1 << 8,
-
-    hasDisp1   = 1 << 7,
-    hasDisp2   = 1 << 6,
-    hasDisp3   = 1 << 5,
-    hasDisp4   = 1 << 4,
-
-    hasImm1    = 1 << 3,
-    hasImm2    = 1 << 2,
-    hasImm3    = 1 << 1,
-    hasImm4    = 1 << 0,
-
-    hasDisp8 = hasDisp1,
-    hasDisp16 = hasDisp1 | hasDisp2,
-    hasDisp32 = hasDisp1 | hasDisp2 | hasDisp3 | hasDisp4,
-
-    hasImm8 = hasImm1,
-    hasImm16 = hasImm1 | hasImm2,
-    hasImm32 = hasImm1 | hasImm2 | hasImm3 | hasImm4,
-  } x86Field;
-
-  typedef struct x86Instruction {
-    unsigned fields;
-    uint8_t prefix[4];
-    uint8_t opcode[3];
-    uint8_t modRM;
-    uint8_t sib;
-    uint32_t displacement;
-    uint32_t immediate;
-  } x86Instruction;
-
-  typedef struct x86Addr {
-    unsigned baseReg;
-    unsigned indexReg;
-    unsigned scale;
-    unsigned dispSize;
-    int32_t  displacement;
-  } x86Addr;
-
-  typedef struct x86FormatParam {
-    unsigned first;
-    unsigned last;
-  } x86FormatParam;
-
-  typedef struct x86Format {
-    unsigned mnemonic;
-    x86FormatParam param[3];
-    unsigned index;
-  } x86Format;
-
-  enum PrefixFlags {
-    hasLock = hasPrefix1,
-    hasRep = hasPrefix1,
-    hasRepe = hasPrefix1,
-    hasRepne = hasPrefix1,
-    hasRepz = hasPrefix1,
-    hasRepnz = hasPrefix1,
-
-    hasSegOverride = hasPrefix2,
-    hasBranch = hasPrefix2,
-    hasNoBranch = hasPrefix2,
-
-    hasOperandSize = hasPrefix3,
-
-    hasAddressSize = hasPrefix4
-  };
-
-  enum PrefixIndices {
-    indexLock = 0,
-    indexRep = 0,
-    indexRepe = 0,
-    indexRepne = 0,
-    indexRepz = 0,
-    indexRepnz = 0,
-
-    indexSegOverride = 1,
-    indexBranch = 1,
-    indexNoBranch = 1,
-
-    indexOperandSize = 2,
-
-    indexAddressSize = 3
-  };
-
-  typedef struct x86Encoding {
-    unsigned fields;
-    uint8_t prefix[4];
-    uint8_t opcode[3];
-    uint8_t modRM;
-    uint8_t xformOp;
-    uint8_t xform[3];
-  } x86Encoding;
-
-  // Global variable
-  typedef struct TargetEnv {
-    uint8_t bits;
-    uint8_t operandWBits;
-    uint8_t operandWPrefix;
-    uint8_t addressWBits;
-    uint8_t addressWPrefix;
-  } TargetEnv;
-
-  TargetEnv target = {
-    32,
-    16,
-    0x66,
-    16,
-    0x67
-  };
-
-  bool x86Emit( FILE* binFile, x86Instruction* instruction );
-
-  bool x86EncodeAddr16( x86Instruction* instruction, x86Addr* addr16 );
-  bool x86EncodeAddr32( x86Instruction* instruction, x86Addr* addr32 );
-
-  bool x86GenOp( FILE* binFile, unsigned mnemonic );
-
-  bool x86GenRepOp( FILE* binFile, unsigned repMnemonic, unsigned mnemonic );
-
-  bool x86GenOpReg( FILE* binFile, unsigned mnemonic, unsigned destReg );
-  bool x86GenOpMem( FILE* binFile, unsigned mnemonic,
-    unsigned memType, unsigned segOverride, x86Addr* addr );
-  bool x86GenOpImm( FILE* binFile, unsigned mnemonic, unsigned immType, unsigned imm );
-
-  bool x86GenOpDisp( FILE* binFile, unsigned mnemonic, unsigned dispType, int displacement );
-
-  bool x86GenOpFarOfs( FILE* binFile, unsigned mnemonic,
-    unsigned selector, unsigned offset );
-
-  bool x86GenOpMemRegImm( FILE* binFile, unsigned mnemonic,
-      unsigned segOverride, x86Addr* addr,
-      unsigned srcReg, unsigned immediate );
-
-  bool x86GenOpRegMemImm( FILE* binFile, unsigned mnemonic,
-    unsigned destReg, unsigned segOverride, x86Addr* addr,
-    unsigned immediate );
-
-  bool x86GenOpRegRegReg( FILE* binFile, unsigned mnemonic,
-    unsigned destReg, unsigned srcReg, unsigned valReg );
-
-  bool x86GenOpRegRegImm( FILE* binFile, unsigned mnemonic,
-    unsigned destReg, unsigned srcReg, unsigned imm );
-
-  bool x86GenOpRegMem( FILE* binFile, unsigned mnemonic,
-    unsigned destReg, unsigned segOverride, x86Addr* addr );
-
-  bool x86GenOpMemReg( FILE* binFile, unsigned mnemonic,
-    unsigned segOverride, x86Addr* addr, unsigned srcReg );
-
-  bool x86GenOpRegReg( FILE* binFile,
-    unsigned mnemonic, unsigned destReg, unsigned srcReg );
-
-  bool x86GenOpMemImm( FILE* binFile,
-    unsigned mnemonic, unsigned segOverride, x86Addr* addr32, unsigned imm );
-
-  bool x86GenOpRegImm( FILE* binFile,
-    unsigned mnemonic, unsigned reg, unsigned imm );
-
-/*
- *  Backpatch declarations
- */
-
-/*
  *  Expression parser declarations
  */
 
 /*
  *  Parser declarations
  */
-
-/*
- *  Temp test functions
- */
-
-  bool TestAddr32( FILE* binFile, unsigned destReg, unsigned baseReg, unsigned indexReg, uint8_t scale, int displacement ) {
-    x86Instruction instruction = {};
-    x86Addr addr32 = {};
-
-    if( binFile == NULL ) {
-      return false;
-    }
-
-    instruction.fields |= hasOpcode1 | hasModRM;
-    instruction.opcode[0] = 0x12;
-    instruction.modRM = (destReg - x86Reg8) << 3;
-
-    addr32.baseReg = baseReg;
-    addr32.indexReg = indexReg;
-    addr32.scale = scale;
-    addr32.displacement = displacement;
-
-    if( x86EncodeAddr32(&instruction, &addr32) ) {
-      return x86Emit(binFile, &instruction);
-    }
-
-    return false;
-  }
 
 /*
  *  Main program
@@ -1205,113 +1158,16 @@ int main( int argc, char* argv[] ) {
     return 1;
   }
 
-  WinPE* peFile = CreatePE("out.exe");
-  ClosePE( &peFile );
-
-  FILE* binFile = fopen("out", "wb");
-  if( binFile ) {
-;;;
-    x86Addr addr = {};
-    addr.baseReg = x86RegEAX;
-    addr.indexReg = x86RegEDI;
-    x86GenOpRegMem( binFile, x86Adc, x86RegEBP, x86SRegES, &addr );
-
-    addr.baseReg = x86RegEAX;
-    addr.indexReg = x86RegEDI;
-    x86GenOpRegMem( binFile, x86Adc, x86RegDI, x86SRegDS, &addr );
-
-    addr.baseReg = x86RegBX;
-    addr.indexReg = x86RegDI;
-    x86GenOpRegMem( binFile, x86Adc, x86RegCL, x86SRegFS, &addr );
-
-    x86GenOpRegImm( binFile, x86Adc, x86RegCL, 0x11 );
-    x86GenOpRegImm( binFile, x86Adc, x86RegCL, 100 );
-    x86GenOpRegImm( binFile, x86Adc, x86RegBH, -100 );
-    x86GenOpRegImm( binFile, x86Adc, x86RegCX, 0x1122 );
-    x86GenOpRegImm( binFile, x86Adc, x86RegDX, -100 );
-    x86GenOpRegImm( binFile, x86Adc, x86RegDI, 100 );
-    x86GenOpRegImm( binFile, x86Adc, x86RegECX, 0x11223344 );
-    x86GenOpRegImm( binFile, x86Adc, x86RegESI, 100 );
-    x86GenOpRegImm( binFile, x86Adc, x86RegEDI, -100 );
-
-    x86GenOpRegRegReg( binFile, x86Shrd, x86RegECX, x86RegEDI, x86RegCL );
-
-    x86GenOpRegReg( binFile, x86Add, x86RegCL, x86RegBH );
-    x86GenOpRegReg( binFile, x86Add, x86RegCX, x86RegDI );
-    x86GenOpRegReg( binFile, x86Add, x86RegECX, x86RegEDI );
-
-    x86GenOp( binFile, x86Xlatb );
-
-    x86GenOp( binFile, x86Stosb );
-    x86GenOp( binFile, x86Stosw );
-    x86GenOp( binFile, x86Stosd );
-
-    x86GenRepOp( binFile, x86Rep, x86Cmpsb );
-    x86GenRepOp( binFile, x86Repne, x86Cmpsw );
-    x86GenRepOp( binFile, x86Repz, x86Cmpsd );
-
-    x86GenOpReg( binFile, x86Push, x86RegCX );
-    x86GenOpReg( binFile, x86Push, x86RegDI );
-    x86GenOpReg( binFile, x86Push, x86RegECX );
-    x86GenOpReg( binFile, x86Push, x86RegEDI );
-
-    addr.baseReg = x86RegBP;
-    addr.indexReg = x86RegSI;
-    x86GenOpMem( binFile, x86Push, x86Mem16, x86SRegES, &addr );
-
-    addr.baseReg = x86RegEBP;
-    addr.indexReg = x86RegEDI;
-    x86GenOpMem( binFile, x86Push, x86Mem32, x86SRegGS, &addr );
-
-    x86GenOpImm( binFile, x86Push, valUint16, 0x1122 );
-    x86GenOpImm( binFile, x86Push, valUint16, 100 );
-    x86GenOpImm( binFile, x86Push, valUint16, -100 );
-    x86GenOpImm( binFile, x86Push, valUint32, 0x11223344 );
-    x86GenOpImm( binFile, x86Push, valUint32, 100 );
-    x86GenOpImm( binFile, x86Push, valUint32, -100 );
-
-    x86GenOpDisp( binFile, x86Call, x86Near, 0x11223344 );
-    x86GenOpDisp( binFile, x86Jmp, x86Short, 0x11 );
-    x86GenOpDisp( binFile, x86Jmp, x86Near, 0x11223344 );
-
-    x86GenOpFarOfs( binFile, x86Call, 0xAABB, 0x11223344 );
-    x86GenOpFarOfs( binFile, x86Jmp, 0xAABB, 0x11223344 );
-
-    addr.baseReg = x86RegEDX;
-    addr.indexReg = x86RegEBP;
-    addr.displacement = 0xAABBCCDD;
-    x86GenOpRegMemImm( binFile, x86Imul, x86RegECX, x86SRegES, &addr, 0x11223344 );
-    addr.displacement = 0;
-    x86GenOpRegMemImm( binFile, x86Imul, x86RegEBX, 0, &addr, 100 );
-    x86GenOpRegMemImm( binFile, x86Imul, x86RegESI, x86SRegSS, &addr, -100 );
-
-    addr.baseReg = x86RegBP;
-    addr.indexReg = x86RegDI;
-    addr.displacement = 0xAABB;
-    x86GenOpRegMemImm( binFile, x86Imul, x86RegCX, x86SRegES, &addr, 0x11223344 );
-    addr.displacement = 0;
-    x86GenOpRegMemImm( binFile, x86Imul, x86RegBX, 0, &addr, 100 );
-    x86GenOpRegMemImm( binFile, x86Imul, x86RegSI, x86SRegSS, &addr, -100 );
-
-    addr.baseReg = x86RegEDX;
-    addr.indexReg = x86RegEBP;
-    addr.displacement = 0xAABBCCDD;
-    x86GenOpMemRegImm( binFile, x86Shrd, x86SRegES, &addr, x86RegECX, 0x11223344 );
-    addr.displacement = 0;
-    x86GenOpMemRegImm( binFile, x86Shrd, 0, &addr, x86RegEBX, 100 );
-    x86GenOpMemRegImm( binFile, x86Shrd, x86SRegSS, &addr, x86RegESI, -100 );
-
-    addr.baseReg = x86RegBP;
-    addr.indexReg = x86RegDI;
-    addr.displacement = 0xAABB;
-    x86GenOpMemRegImm( binFile, x86Shrd, x86SRegES, &addr, x86RegCX, 0x11223344 );
-    addr.displacement = 0;
-    x86GenOpMemRegImm( binFile, x86Shrd, 0, &addr, x86RegBX, 100 );
-    x86GenOpMemRegImm( binFile, x86Shrd, x86SRegSS, &addr, x86RegSI, -100 );
-
-    fclose( binFile );
-    binFile = NULL;
+  if( argc >= 2 ) {
+    ///TODO: If file extension doesn't contain ".", then append ".ret"
   }
+
+  if( argc >= 3 ) {
+    ///TODO: If parameter and/or extension not specified, extract base file name, and append ".exe"
+  }
+
+  printf( "retFileName = '%s'\n", rstrtext(retFileName) );
+  printf( "exeFileName = '%s'\n", rstrtext(exeFileName) );
 
   return 0;
 }
@@ -2253,2490 +2109,6 @@ int main( int argc, char* argv[] ) {
 
     return token;
   }
-
-/*
- *  Windows PE implementation
- */
-
-  WinPE* CreatePE( char* fileName ) {
-    WinPE* newPE = NULL;
-    FILE* dosStub = NULL;
-    uint32_t peSig = SIG_PEXE;
-    COFFHeader coffHeader = {};
-    PEOptHeader32 optHeader = {};
-    PESectionHeader sectHeader = {};
-    uint8_t fileBuf[256];
-    size_t bytesRead;
-    size_t bytesWritten;
-    size_t pePos;
-
-    if( !(fileName && (*fileName)) ) {
-      return NULL;
-    }
-
-    newPE = calloc(1, sizeof(WinPE));
-    if( newPE == NULL ) {
-      goto ReturnError;
-    }
-
-    newPE->handle = fopen(fileName, "wb");
-    if( newPE->handle == NULL ) {
-      goto ReturnError;
-    }
-
-    // Write MS-DOS stub
-    dosStub = fopen("dosstub", "rb");
-    if( dosStub == NULL ) {
-      goto ReturnError;
-    }
-
-    do {
-      bytesRead = fread(fileBuf, 1, sizeof(fileBuf), dosStub);
-      bytesWritten = fwrite(fileBuf, 1, bytesRead, newPE->handle);
-    } while( bytesWritten );
-
-    fclose( dosStub );
-    dosStub = NULL;
-
-    pePos = ftell(newPE->handle);
-    if( pePos == -1L ) {
-      goto ReturnError;
-    }
-
-    // Write PE header offset to DOS Stub header
-    if( fseek(newPE->handle, 0x3C, SEEK_SET) ) {
-      goto ReturnError;
-    }
-    if( fwrite(&pePos, 1, sizeof(pePos), newPE->handle) != sizeof(pePos) ) {
-      goto ReturnError;
-    }
-
-    if( fseek(newPE->handle, 0, SEEK_END) ) {
-      goto ReturnError;
-    }
-
-    // Write PE signature and headers
-    if( fwrite(&peSig, 1, sizeof(peSig), newPE->handle) != sizeof(peSig) ) {
-      goto ReturnError;
-    }
-
-    // Write COFF Header
-    coffHeader.Machine = CM_I386;
-    coffHeader.NumberOfSections = 0;
-    coffHeader.TimeDateStamp = 0;
-    coffHeader.PointerToSymbolTable = 0;
-    coffHeader.NumberOfSymbols = 0;
-    coffHeader.SizeOfOptionalHeader = sizeof(PEOptHeader32);
-    coffHeader.Characteristics =
-        IMAGE_FILE_EXECUTABLE_IMAGE | IMAGE_FILE_32BIT_MACHINE;
-    if( fwrite(&coffHeader, 1, sizeof(coffHeader), newPE->handle) != sizeof(coffHeader) ) {
-      goto ReturnError;
-    }
-
-    // Write Optional Header
-    optHeader.signature = IMAGE_NT_OPTIONAL_HDR32_MAGIC;
-    optHeader.MajorLinkedVersion = 0;
-    optHeader.MinorLinkedVersion = 1;
-    optHeader.SizeOfCode = 0;
-    optHeader.SizeOfInitializedData = 0;
-    optHeader.SizeOfUninitializedData = 0;
-    optHeader.AddressOfEntryPoint = 0x1000; // Entry point RVA
-    optHeader.BaseOfCode = 0;
-    optHeader.BaseOfData = 0;
-    optHeader.ImageBase = 0x00400000; // Default App
-    optHeader.SectionAlignment = 0x1000; // Default
-    optHeader.FileAlignment = 0x200; // Default
-    optHeader.MajorOSVersion = 1;
-    optHeader.MinorOSVersion = 0;
-    optHeader.MajorImageVersion = 0;
-    optHeader.MinorImageVersion = 0;
-    optHeader.MajorSubsystemVersion = 4;
-    optHeader.MinorSubsystemVersion = 0;
-    optHeader.Win32VersionValue = 0;
-    optHeader.SizeOfImage = 0;
-    optHeader.SizeOfHeaders = 0;
-    optHeader.Checksum = 0;
-    optHeader.Subsystem = IMAGE_SUBSYSTEM_WINDOWS_CUI;
-    optHeader.DLLCharacteristics = 0;
-    optHeader.SizeOfStackReserve = 0x100000; // "Max"
-    optHeader.SizeOfStackCommit = 0x1000; // "First" += 4K until "Max"
-    optHeader.SizeOfHeapReserve = 0x100000; // "Max"
-    optHeader.SizeOfHeapCommit = 0x1000; // "First" += 4K until "Max"
-    optHeader.LoaderFlags = 0;
-    optHeader.NumberOfRVAAndSizes = 0x10;
-    if( fwrite(&optHeader, 1, sizeof(optHeader), newPE->handle) != sizeof(optHeader) ) {
-      goto ReturnError;
-    }
-
-    ///TODO: Write .text section header
-    strcpy( sectHeader.Name, "text" );
-
-    return newPE;
-
-  ReturnError:
-    if( dosStub ) {
-      fclose( dosStub );
-      dosStub = NULL;
-    }
-    ClosePE( &newPE );
-    return NULL;
-  }
-
-  void ClosePE( WinPE** winpe ) {
-    if( winpe ) {
-      if( (*winpe) ) {
-        if( (*winpe)->handle ) {
-          ///TODO: Finalize header/etc.
-
-          fclose( (*winpe)->handle );
-          (*winpe)->handle = NULL;
-        }
-
-        free( (*winpe) );
-        (*winpe) = NULL;
-      }
-    }
-  }
-
-/*
- *  Code generator implementation
- */
-
-  const size_t formatStart[] = {
-    /* x86Call   */ -1,
-    /* x86Push   */ 23,
-    /* x86Popf   */ -1,
-    /* x86Pushf  */ -1,
-    /* x86Ret    */ -1,
-    /* x86Retf   */ -1,
-    /* x86Adc    */ 0,
-    /* x86Add    */ 12,
-    /* x86And    */ -1,
-    /* x86Cmp    */ -1,
-    /* x86Dec    */ -1,
-    /* x86Div    */ -1,
-    /* x86IDiv   */ -1,
-    /* x86Imul   */ 27,
-    /* x86In     */ -1,
-    /* x86Inc    */ -1,
-    /* x86Int    */ -1,
-    /* x86Jo     */ -1,
-    /* x86Jno    */ -1,
-    /* x86Jb     */ -1,
-    /* x86Jnb    */ -1,
-    /* x86Je     */ -1,
-    /* x86Jne    */ -1,
-    /* x86Jbe    */ -1,
-    /* x86Jnbe   */ -1,
-    /* x86Js     */ -1,
-    /* x86Jns    */ -1,
-    /* x86Jp     */ -1,
-    /* x86Jnp    */ -1,
-    /* x86Jl     */ -1,
-    /* x86Jnl    */ -1,
-    /* x86Jle    */ -1,
-    /* x86Jnle   */ -1,
-    /* x86Jcxz   */ -1,
-    /* x86Jmp    */ -1,
-    /* x86Lds    */ -1,
-    /* x86Les    */ -1,
-    /* x86Lea    */ -1,
-    /* x86Loop   */ -1,
-    /* x86Loope  */ -1,
-    /* x86Loopne */ -1,
-    /* x86Loopz  */ -1,
-    /* x86Loopnz */ -1,
-    /* x86Mov    */ -1,
-    /* x86Mul    */ -1,
-    /* x86Neg    */ -1,
-    /* x86Not    */ -1,
-    /* x86Or     */ -1,
-    /* x86Out    */ -1,
-    /* x86Pop    */ -1,
-    /* x86Rcl    */ -1,
-    /* x86Rcr    */ -1,
-    /* x86Rol    */ -1,
-    /* x86Ror    */ -1,
-    /* x86Sal    */ -1,
-    /* x86Sar    */ -1,
-    /* x86Shl    */ -1,
-    /* x86Shld   */ -1,
-    /* x86Shr    */ -1,
-    /* x86Shrd   */ 15,
-    /* x86Sbb    */ -1,
-    /* x86Sub    */ -1,
-    /* x86Test   */ -1,
-    /* x86Xchg   */ -1,
-    /* x86Xor    */ -1,
-    /* x86Cbw    */ -1,
-    /* x86Cdq    */ -1,
-    /* x86Cwd    */ -1,
-    /* x86Clc    */ -1,
-    /* x86Cld    */ -1,
-    /* x86Cli    */ -1,
-    /* x86Cmc    */ -1,
-    /* x86Int3   */ -1,
-    /* x86Iret   */ -1,
-    /* x86Lahf   */ -1,
-    /* x86Nop    */ -1,
-    /* x86Rep    */ -1,
-    /* x86Repe   */ -1,
-    /* x86Repne  */ -1,
-    /* x86Repz   */ -1,
-    /* x86Repnz  */ -1,
-    /* x86Cmpsb  */ -1,
-    /* x86Cmpsw  */ -1,
-    /* x86Cmpsd  */ -1,
-    /* x86Scasb  */ -1,
-    /* x86Scasw  */ -1,
-    /* x86Scasd  */ -1,
-    /* x86Lodsb  */ -1,
-    /* x86Lodsw  */ -1,
-    /* x86Lodsd  */ -1,
-    /* x86Movsb  */ -1,
-    /* x86Movsw  */ -1,
-    /* x86Movsd  */ -1,
-    /* x86Stosb  */ -1,
-    /* x86Stosw  */ -1,
-    /* x86Stosd  */ -1,
-    /* x86Sahf   */ -1,
-    /* x86Stc    */ -1,
-    /* x86Std    */ -1,
-    /* x86Sti    */ -1,
-    /* x86Xlatb  */ -1
-  };
-  const formatStartCount = sizeof(formatStart) / sizeof(formatStart[0]);
-
-  // mnemonic,
-  // param1.first, param1.last, param2.first, param2.last, param3.first, param3.last,
-  // index
-  const x86Format formatTable[] = {
-    // adc
-    /*  0 */ x86Adc, x86RegAL, x86RegAL, firstValUint, lastValUint, 0, 0, 0,
-    /*  1 */ x86Adc, x86RegAX, x86RegAX, firstValUint, lastValUint, 0, 0, 1,
-    /*  2 */ x86Adc, x86RegEAX, x86RegEAX, firstValUint, lastValUint, 0, 0, 1,
-    /*  3 */ x86Adc, firstX86Reg8, lastX86Reg8, firstValUint, lastValUint, 0, 0, 2,
-    /*  4 */ x86Adc, firstX86Reg16, lastX86Reg16, firstValUint, lastValUint, 0, 0, 3,
-    /*  5 */ x86Adc, firstX86Reg32, lastX86Reg32, firstValUint, lastValUint, 0, 0, 3,
-    /*  6 */ x86Adc, firstX86Reg8, lastX86Reg8, firstX86Mem, lastX86Mem, 0, 0, 4,
-    /*  7 */ x86Adc, firstX86Reg16, lastX86Reg16, firstX86Mem, lastX86Mem, 0, 0, 5,
-    /*  8 */ x86Adc, firstX86Reg32, lastX86Reg32, firstX86Mem, lastX86Mem, 0, 0, 5,
-    /*  9 */ x86Adc, firstX86Reg8, lastX86Reg8, firstX86Reg8, lastX86Reg8, 0, 0, 6,
-    /* 10 */ x86Adc, firstX86Reg16, lastX86Reg16, firstX86Reg16, lastX86Reg16, 0, 0, 7,
-    /* 11 */ x86Adc, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, 0, 0, 7,
-
-    // add
-    /* 12 */ x86Add, firstX86Reg8, lastX86Reg8, firstX86Reg8, lastX86Reg8, 0, 0, 8,
-    /* 13 */ x86Add, firstX86Reg16, lastX86Reg16, firstX86Reg16, lastX86Reg16, 0, 0, 9,
-    /* 14 */ x86Add, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, 0, 0, 9,
-
-    // shrd
-    /* 15 */ x86Shrd, firstX86Reg16, lastX86Reg16, firstX86Reg16, lastX86Reg16, valUint8, valUint8, 10,
-    /* 16 */ x86Shrd, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, valUint8, valUint8, 10,
-    /* 17 */ x86Shrd, firstX86Reg16, lastX86Reg16, firstX86Reg16, lastX86Reg16, x86RegCL, x86RegCL, 11,
-    /* 18 */ x86Shrd, firstX86Reg32, lastX86Reg32, firstX86Reg32, lastX86Reg32, x86RegCL, x86RegCL, 11,
-    /* 19 */ x86Shrd, x86Mem16, x86Mem32, firstX86Reg16, lastX86Reg16, valUint8, valUint8, 12,
-    /* 20 */ x86Shrd, x86Mem16, x86Mem32, firstX86Reg32, lastX86Reg32, valUint8, valUint8, 12,
-    /* 21 */ x86Shrd, x86Mem16, x86Mem32, firstX86Reg16, lastX86Reg16, x86RegCL, x86RegCL, 13,
-    /* 22 */ x86Shrd, x86Mem16, x86Mem32, firstX86Reg32, lastX86Reg32, x86RegCL, x86RegCL, 13,
-
-    // push
-    /* 23 */ x86Push, firstX86Reg16, lastX86Reg16, 0, 0, 0, 0, 14,
-    /* 24 */ x86Push, firstX86Reg32, lastX86Reg32, 0, 0, 0, 0, 14,
-    /* 25 */ x86Push, x86Mem16, x86Mem32, 0, 0, 0, 0, 15,
-    /* 26 */ x86Push, valUint16, valUint32, 0, 0, 0, 0, 16,
-
-    // imul
-    /* 27 */ x86Imul, firstX86Reg16, lastX86Reg16, firstX86Mem, lastX86Mem, firstValUint, lastValUint, 17,
-    /* 28 */ x86Imul, firstX86Reg32, lastX86Reg32, firstX86Mem, lastX86Mem, firstValUint, lastValUint, 17,
-  };
-  const formatCount = sizeof(formatTable) / sizeof(formatTable[0]);
-
-  enum x86Transform {
-    xformOpW = 1, // Add operand size prefix, set op's W bit
-    xformSizeW,   // Add operand size prefix
-    xformOpRegW,  // Add register value to opcode, and operand size prefix
-    xformModReg,  // Add register to ModRM bits 3..5
-    xformRMReg,   // Add register to ModRM bits 0..2
-    xformImmS8,   // S bit in last opcode if imm in [-128..127]
-    xformToImm8   // Encode an 8-bit immediate
-  };
-
-  // fields,
-  // prefix1, prefix2, prefix3, prefix4,
-  // opcode1, opcode2, opcode3, modRM,
-  // xformop, xform1, xform2, xform3
-  const x86Encoding encodeTable[] = {
-    // adc encodings
-    /*  0 */ hasOpcode1, 0, 0, 0, 0, 0x14, 0, 0, 0, 0, 0, 0, 0,
-    /*  1 */ hasOpcode1, 0, 0, 0, 0, 0x14, 0, 0, 0, xformOpW, 0, 0, 0,
-    /*  2 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x80, 0, 0, 0xD0, 0, xformRMReg, 0, 0,
-    /*  3 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x80, 0, 0, 0xD0, xformOpW, xformRMReg, xformImmS8, 0,
-    /*  4 */ hasOpcode1, 0, 0, 0, 0, 0x12, 0, 0, 0, 0, xformModReg, 0, 0,
-    /*  5 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x12, 0, 0, 0, xformOpW, xformModReg, 0, 0,
-    /*  6 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x10, 0, 0, 0xC0, 0, xformRMReg, xformModReg, 0,
-    /*  7 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x10, 0, 0, 0xC0, xformOpW, xformRMReg, xformModReg, 0,
-
-    // add encodings
-    /*  8 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x00, 0, 0, 0xC0, 0, xformRMReg, xformModReg, 0,
-    /*  9 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0x00, 0, 0, 0xC0, xformOpW, xformRMReg, xformModReg, 0,
-
-    // shrd encodings
-    /* 10 */ hasOpcode1 | hasOpcode2 | hasModRM, 0, 0, 0, 0, 0x0F, 0xAC, 0, 0xC0, xformSizeW, xformRMReg, xformModReg, xformToImm8,
-    /* 11 */ hasOpcode1 | hasOpcode2 | hasModRM, 0, 0, 0, 0, 0x0F, 0xAD, 0, 0xC0, xformSizeW, xformRMReg, xformModReg, 0,
-    /* 12 */ hasOpcode1 | hasOpcode2, 0, 0, 0, 0, 0x0F, 0xAC, 0, 0, xformSizeW, 0, xformModReg, xformToImm8,
-    /* 13 */ hasOpcode1 | hasOpcode2, 0, 0, 0, 0, 0x0F, 0xAD, 0, 0, xformSizeW, 0, xformModReg, 0,
-
-    // push encodings
-    /* 14 */ hasOpcode1, 0, 0, 0, 0, 0x50, 0, 0, 0, xformOpRegW, 0, 0, 0,
-    /* 15 */ hasOpcode1 | hasModRM, 0, 0, 0, 0, 0xFF, 0, 0, 0x30, xformSizeW, 0, 0, 0,
-    /* 16 */ hasOpcode1, 0, 0, 0, 0, 0x68, 0, 0, 0, xformSizeW, xformImmS8, 0, 0,
-
-    // imul
-    /* 17 */ hasOpcode1, 0, 0, 0, 0, 0x69, 0, 0, 0, xformSizeW, xformModReg, 0, xformImmS8,
-  };
-  const encodeCount = sizeof(encodeTable) / sizeof(encodeTable[0]);
-
-  const uint8_t x86SegPrefixes[] = {
-    /* x86SRegES */ 0x26,
-    /* x86SRegCS */ 0x2E,
-    /* x86SRegSS */ 0x36,
-    /* x86SRegDS */ 0x3E,
-    /* x86SRegFS */ 0x64,
-    /* x86SRegGS */ 0x65
-  };
-
-  bool x86Emit( FILE* binFile, x86Instruction* instruction ) {
-    uint8_t machineCode[sizeof(x86Instruction)];
-    unsigned codeLength = 0;
-    unsigned fields;
-    unsigned fieldBit;
-    unsigned index;
-
-    if( !(binFile && instruction) ) {
-      return false;
-    }
-
-    fields = instruction->fields;
-
-    if( fields & hasPrefix1 ) {
-      machineCode[codeLength++] = instruction->prefix[0];
-    }
-
-    if( fields & hasPrefix2 ) {
-      machineCode[codeLength++] = instruction->prefix[1];
-    }
-
-    if( fields & hasPrefix3 ) {
-      machineCode[codeLength++] = instruction->prefix[2];
-    }
-
-    if( fields & hasPrefix4 ) {
-      machineCode[codeLength++] = instruction->prefix[3];
-    }
-
-    if( fields & hasOpcode1 ) {
-      machineCode[codeLength++] = instruction->opcode[0];
-    }
-
-    if( fields & hasOpcode2 ) {
-      machineCode[codeLength++] = instruction->opcode[1];
-    }
-
-    if( fields & hasOpcode3 ) {
-      machineCode[codeLength++] = instruction->opcode[2];
-    }
-
-    if( fields & hasModRM ) {
-      machineCode[codeLength++] = instruction->modRM;
-    }
-
-    if( fields & hasSIB ) {
-      machineCode[codeLength++] = instruction->sib;
-    }
-
-    switch( fields & hasDisp32 ) {
-    case hasDisp8:
-      machineCode[codeLength++] = instruction->displacement;
-      break;
-
-    case hasDisp16:
-      machineCode[codeLength++] = instruction->displacement;
-      machineCode[codeLength++] = instruction->displacement >> 8;
-      break;
-
-    case hasDisp32:
-      machineCode[codeLength++] = instruction->displacement;
-      machineCode[codeLength++] = instruction->displacement >> 8;
-      machineCode[codeLength++] = instruction->displacement >> 16;
-      machineCode[codeLength++] = instruction->displacement >> 24;
-      break;
-    }
-
-    switch( fields & hasImm32 ) {
-    case hasImm8:
-      machineCode[codeLength++] = instruction->immediate;
-      break;
-
-    case hasImm16:
-      machineCode[codeLength++] = instruction->immediate;
-      machineCode[codeLength++] = instruction->immediate >> 8;
-      break;
-
-    case hasImm32:
-      machineCode[codeLength++] = instruction->immediate;
-      machineCode[codeLength++] = instruction->immediate >> 8;
-      machineCode[codeLength++] = instruction->immediate >> 16;
-      machineCode[codeLength++] = instruction->immediate >> 24;
-      break;
-    }
-
-    return (codeLength &&
-        (fwrite(machineCode, 1, codeLength, binFile) == codeLength));
-  }
-
-  enum AddrReg16 {
-    indexSI = 1,
-    indexDI = 2,
-    baseBX = 4,
-    baseBP = 8
-  };
-
-  const uint8_t x86Mem16Table[16] = {
-    /*  0 */ 0x38, // Invalid
-    /*  1 */ 0x04, // [SI]
-    /*  2 */ 0x05, // [DI]
-    /*  3 */ 0x38, // Invalid
-    /*  4 */ 0x07, // [BX]
-    /*  5 */ 0x00, // [BX + SI]
-    /*  6 */ 0x01, // [BX + DI]
-    /*  7 */ 0x38, // Invalid
-    /*  8 */ 0x06, // [BP + <DISP8 | DISP16>] if not [DISP16]
-    /*  9 */ 0x02, // [BP + SI]
-    /* 10 */ 0x03, // [BP + DI]
-    /* 11 */ 0x38, // Invalid
-    /* 12 */ 0x38, // Invalid
-    /* 13 */ 0x38, // Invalid
-    /* 14 */ 0x38, // Invalid
-    /* 15 */ 0x38  // Invalid
-  };
-
-  bool x86EncodeAddr16( x86Instruction* instruction, x86Addr* addr16 ) {
-    unsigned baseReg = 0;
-    unsigned indexReg = 0;
-    unsigned iteration;
-    int displacement;
-    uint8_t modRM;
-    uint8_t xlateRM;
-
-    if( !(instruction && addr16) ) {
-      return false;
-    }
-    modRM = instruction->modRM;
-    displacement = addr16->displacement;
-
-    switch( addr16->baseReg ) {
-    case 0:
-      break;
-
-    case x86RegBX:
-      baseReg = baseBX;
-      break;
-
-    case x86RegBP:
-      baseReg = baseBP;
-      break;
-
-    default:
-      return false;
-    }
-
-    switch( addr16->indexReg ) {
-    case 0:
-      break;
-
-    case x86RegSI:
-      indexReg = indexSI;
-      break;
-
-    case x86RegDI:
-      indexReg = indexDI;
-      break;
-
-    default:
-      return false;
-    }
-
-    if( (baseReg | indexReg) > 15 ) {
-      return false;
-    }
-
-    xlateRM = x86Mem16Table[baseReg | indexReg];
-    if( xlateRM == 0x38 ) {
-      return false;
-    }
-    modRM |= xlateRM;
-
-    instruction->fields |= hasModRM;
-    instruction->modRM |= modRM;
-
-    if( (baseReg != baseBP) && (displacement == 0) ) {
-      // [base + index]
-    } else if( (displacement >= -128) && (displacement <= 127) ) {
-      // [base + index + disp8]
-      instruction->fields |= hasDisp8;
-      instruction->modRM |= 0x40;
-      instruction->displacement = displacement;
-    } else {
-      // Assume [base + index + disp16]
-      instruction->fields |= hasDisp16;
-      instruction->modRM |= 0x80;
-      instruction->displacement = displacement;
-    }
-
-    if( target.bits != 16 ) {
-      instruction->fields |= hasAddressSize;
-      instruction->prefix[indexAddressSize] = target.addressWPrefix;
-    }
-
-    return true;
-  }
-
-  bool x86EncodeAddr32( x86Instruction* instruction, x86Addr* addr32 ) {
-    x86Instruction tempInstruction = {};
-    x86Addr tempAddr = {};
-
-    if( !(instruction && addr32 && (addr32->indexReg != x86RegESP)) ) {
-      return false;
-    }
-
-    tempInstruction = *instruction;
-    tempAddr = *addr32;
-
-    if( (tempAddr.baseReg || tempAddr.indexReg) &&
-        (((tempAddr.baseReg | tempAddr.indexReg) & x86OperandMask) != x86Reg32) ) {
-      return false;
-    }
-
-    if( (tempAddr.baseReg > lastX86Reg32) || (tempAddr.indexReg > lastX86Reg32) ) {
-      return false;
-    }
-
-    if( (tempAddr.indexReg == 0) && tempAddr.scale ) {
-      return false;
-    }
-
-    if( (tempAddr.baseReg | tempAddr.indexReg) == 0 ) {
-      tempInstruction.fields |= hasModRM | hasDisp32;
-      tempInstruction.modRM |= 0x05;
-      tempInstruction.displacement = tempAddr.displacement;
-      *instruction = tempInstruction;
-      return true;
-    }
-
-    tempInstruction.fields |= hasModRM;
-    tempInstruction.modRM = (tempInstruction.modRM & (~7));
-    if( tempAddr.baseReg ) {
-      tempInstruction.modRM |= (tempAddr.baseReg - firstX86Reg32);
-    }
-
-    if( (tempAddr.baseReg == x86RegEBP) || tempAddr.displacement ) {
-      if( (tempAddr.displacement >= -128) && (tempAddr.displacement <= 127) ) {
-        tempInstruction.fields |= hasDisp8;
-        tempInstruction.modRM |= 0x40;
-      } else {
-        tempInstruction.fields |= hasDisp32;
-        tempInstruction.modRM |= 0x80;
-      }
-      tempInstruction.displacement = tempAddr.displacement;
-    }
-
-    if( (tempAddr.baseReg == x86RegESP) || (tempAddr.indexReg) ) {
-      tempInstruction.fields |= hasSIB;
-      tempInstruction.sib = (0x04 << 3);
-      if( tempAddr.baseReg ) {
-        tempInstruction.sib |= (tempInstruction.modRM & 7);
-      } else {
-        tempInstruction.sib |= 0x04;
-      }
-      tempInstruction.modRM = (tempInstruction.modRM & (~7)) | 0x04;
-    }
-
-    if( tempAddr.indexReg ) {
-      if( tempAddr.baseReg == 0 ) {
-        tempInstruction.fields |= hasDisp32;
-        tempInstruction.modRM &= 0x3F;
-
-        tempInstruction.sib = (tempInstruction.sib & (~0x3F)) |
-            ((tempAddr.indexReg - firstX86Reg32) << 3) | 0x05;
-      } else {
-        tempInstruction.sib = (tempInstruction.sib & (~0x38)) |
-            ((tempAddr.indexReg - firstX86Reg32) << 3);
-      }
-
-      switch( tempAddr.scale ) {
-      case 0:
-      case 1:
-        break;
-
-      case 2:
-        tempInstruction.sib |= (1 << 6);
-        break;
-
-      case 4:
-        tempInstruction.sib |= (2 << 6);
-        break;
-
-      case 8:
-        tempInstruction.sib |= (3 << 6);
-        break;
-
-      default:
-        return false;
-      }
-    }
-
-    *instruction = tempInstruction;
-    return true;
-  }
-
-  bool x86GenOp( FILE* binFile, unsigned mnemonic ) {
-    x86Instruction instruction = {};
-    size_t mnemonicIndex;
-    size_t formatIndex;
-    size_t encodeIndex;
-    x86FormatParam param1;
-    x86FormatParam param2;
-    x86FormatParam param3;
-    bool encodeResult;
-
-    if( !(binFile && mnemonic) ) {
-      return false;
-    }
-
-    // Initialize opcode
-    instruction.opcode[0] = 0;
-    switch( mnemonic ) {
-    case x86Cmpsd:
-    case x86Cmpsw:
-      instruction.opcode[0]++;
-    case x86Cmpsb:
-      instruction.opcode[0] += 0xA6;
-      break;
-
-    case x86Lodsd:
-    case x86Lodsw:
-      instruction.opcode[0]++;
-    case x86Lodsb:
-      instruction.opcode[0] += 0xAC;
-      break;
-
-    case x86Movsd:
-    case x86Movsw:
-      instruction.opcode[0]++;
-    case x86Movsb:
-      instruction.opcode[0] += 0xA4;
-      break;
-
-    case x86Scasd:
-    case x86Scasw:
-      instruction.opcode[0]++;
-    case x86Scasb:
-      instruction.opcode[0] += 0xAE;
-      break;
-
-    case x86Stosd:
-    case x86Stosw:
-      instruction.opcode[0]++;
-    case x86Stosb:
-      instruction.opcode[0] += 0xAA;
-      break;
-
-    case x86Xlatb:
-      instruction.opcode[0] = 0xD7;
-      break;
-
-    default:
-      return false;
-    }
-    instruction.fields |= hasOpcode1;
-
-    // Encode size prefix
-    switch( mnemonic ) {
-    case x86Cmpsw:
-    case x86Lodsw:
-    case x86Movsw:
-    case x86Scasw:
-    case x86Stosw:
-      if( target.bits != 16 ) {
-        instruction.fields |= hasOperandSize;
-        instruction.prefix[indexOperandSize] = target.operandWPrefix;
-      }
-      break;
-
-    case x86Cmpsd:
-    case x86Lodsd:
-    case x86Movsd:
-    case x86Scasd:
-    case x86Stosd:
-      if( target.bits != 32 ) {
-        instruction.fields |= hasOperandSize;
-        instruction.prefix[indexOperandSize] = target.operandWPrefix;
-      }
-      break;
-    }
-
-    return x86Emit(binFile, &instruction);
-  }
-
-  bool x86GenRepOp( FILE* binFile, unsigned repMnemonic, unsigned mnemonic ) {
-    x86Instruction instruction = {};
-
-    switch( repMnemonic ) {
-    case x86Repne:
-    case x86Repnz:
-      instruction.fields |= hasRep;
-      instruction.prefix[indexRep] = 0xF2;
-      break;
-
-    case x86Rep:
-    case x86Repe:
-    case x86Repz:
-      instruction.fields |= hasRep;
-      instruction.prefix[indexRep] = 0xF3;
-      break;
-
-    default:
-      return false;
-    }
-
-    // Initialize opcode
-    instruction.opcode[0] = 0;
-    switch( mnemonic ) {
-    case x86Cmpsd:
-    case x86Cmpsw:
-      instruction.opcode[0]++;
-    case x86Cmpsb:
-      instruction.opcode[0] += 0xA6;
-      break;
-
-    case x86Lodsd:
-    case x86Lodsw:
-      instruction.opcode[0]++;
-    case x86Lodsb:
-      instruction.opcode[0] += 0xAC;
-      break;
-
-    case x86Movsd:
-    case x86Movsw:
-      instruction.opcode[0]++;
-    case x86Movsb:
-      instruction.opcode[0] += 0xA4;
-      break;
-
-    case x86Scasd:
-    case x86Scasw:
-      instruction.opcode[0]++;
-    case x86Scasb:
-      instruction.opcode[0] += 0xAE;
-      break;
-
-    case x86Stosd:
-    case x86Stosw:
-      instruction.opcode[0]++;
-    case x86Stosb:
-      instruction.opcode[0] += 0xAA;
-      break;
-
-    default:
-      return false;
-    }
-    instruction.fields |= hasOpcode1;
-
-    // Encode size prefix
-    switch( mnemonic ) {
-    case x86Cmpsw:
-    case x86Lodsw:
-    case x86Movsw:
-    case x86Scasw:
-    case x86Stosw:
-      if( target.bits != 16 ) {
-        instruction.fields |= hasOperandSize;
-        instruction.prefix[indexOperandSize] = target.operandWPrefix;
-      }
-      break;
-
-    case x86Cmpsd:
-    case x86Lodsd:
-    case x86Movsd:
-    case x86Scasd:
-    case x86Stosd:
-      if( target.bits != 32 ) {
-        instruction.fields |= hasOperandSize;
-        instruction.prefix[indexOperandSize] = target.operandWPrefix;
-      }
-      break;
-    }
-
-    return x86Emit(binFile, &instruction);
-  }
-
-  bool x86GenOpReg( FILE* binFile, unsigned mnemonic, unsigned reg ) {
-    x86Instruction instruction = {};
-    size_t mnemonicIndex;
-    size_t formatIndex;
-    size_t encodeIndex;
-    x86FormatParam param1;
-    x86FormatParam param2;
-    x86FormatParam param3;
-    unsigned opIndex = 0;
-    unsigned regBits;
-    uint8_t opWBit = 0;
-
-    if( !(binFile && mnemonic) ) {
-      return false;
-    }
-
-    mnemonicIndex = mnemonic - firstX86Ident;
-    if( mnemonicIndex > (lastX86Ident - firstX86Ident) ) {
-      return false;
-    }
-
-    formatIndex = formatStart[mnemonicIndex];
-    if( formatIndex > formatCount ) {
-      return false;
-    }
-
-    do {
-      if( formatTable[formatIndex].mnemonic != mnemonic ) {
-        return false;
-      }
-
-      param1 = formatTable[formatIndex].param[0];
-      param2 = formatTable[formatIndex].param[1];
-      param3 = formatTable[formatIndex].param[2];
-
-      if( (param3.first | param3.last | param2.first | param2.last) == 0 ) {
-        if( (param1.first <= reg) && (reg <= param1.last) ) {
-          break;
-        }
-      }
-
-      formatIndex++;
-    } while( formatIndex < formatCount );
-
-    encodeIndex = formatTable[formatIndex].index;
-    if( encodeIndex >= encodeCount ) {
-      return false;
-    }
-
-    // Initialize instruction structure
-    instruction.fields = encodeTable[encodeIndex].fields;
-
-    instruction.prefix[0] = encodeTable[encodeIndex].prefix[0];
-    instruction.prefix[1] = encodeTable[encodeIndex].prefix[1];
-    instruction.prefix[2] = encodeTable[encodeIndex].prefix[2];
-    instruction.prefix[3] = encodeTable[encodeIndex].prefix[3];
-
-    instruction.opcode[0] = encodeTable[encodeIndex].opcode[0];
-    instruction.opcode[1] = encodeTable[encodeIndex].opcode[1];
-    instruction.opcode[2] = encodeTable[encodeIndex].opcode[2];
-
-    instruction.modRM = encodeTable[encodeIndex].modRM;
-
-    switch( instruction.fields & (hasOpcode1 | hasOpcode2 | hasOpcode3) ) {
-    case hasOpcode3:
-      opIndex++;
-    case hasOpcode2:
-      opIndex++;
-    }
-
-    // Mnemonic/Opcode transforms
-    switch( encodeTable[encodeIndex].xformOp ) {
-    case 0:
-      break;
-
-    case xformOpW:
-      opWBit = 0x01;
-
-    case xformSizeW:
-      regBits = 0;
-      switch( reg & x86OperandMask ) {
-      case x86Reg16:
-        regBits = 16;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      case x86Reg32:
-        regBits = 32;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      default:
-        return false;
-      }
-      if( target.bits != regBits ) {
-        instruction.fields |= hasOperandSize;
-        instruction.prefix[indexOperandSize] = target.operandWPrefix;
-      }
-      break;
-
-    case xformOpRegW:
-      instruction.opcode[opIndex] += (reg - (reg & x86OperandMask));
-
-      regBits = 0;
-      switch( reg & x86OperandMask ) {
-      case x86Reg16:
-        regBits = 16;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      case x86Reg32:
-        regBits = 32;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      default:
-        return false;
-      }
-      if( target.bits != regBits ) {
-        instruction.fields |= hasOperandSize;
-        instruction.prefix[indexOperandSize] = target.operandWPrefix;
-      }
-      break;
-
-    default:
-      return false;
-    }
-
-    // Destination register transforms
-    switch( encodeTable[encodeIndex].xform[0] ) {
-    case 0:
-      break;
-
-    case xformModReg:
-      instruction.modRM |= (reg - (reg & x86OperandMask)) << 3;
-      break;
-
-    case xformRMReg:
-      instruction.modRM |= (reg - (reg & x86OperandMask));
-      break;
-
-    default:
-      return false;
-    }
-
-    // Unused parameter validation
-    if( encodeTable[encodeIndex].xform[1] | encodeTable[encodeIndex].xform[2] ) {
-      return false;
-    }
-
-    return x86Emit(binFile, &instruction);
-  }
-
-  bool x86GenOpMem( FILE* binFile, unsigned mnemonic,
-      unsigned memType, unsigned segOverride, x86Addr* addr ) {
-    x86Instruction instruction = {};
-    size_t mnemonicIndex;
-    size_t formatIndex;
-    size_t encodeIndex;
-    x86FormatParam param1;
-    x86FormatParam param2;
-    x86FormatParam param3;
-    unsigned opIndex = 0;
-    unsigned memBits;
-    unsigned segIndex;
-    bool encodeResult;
-    uint8_t opWBit = 0;
-
-    if( !(binFile && mnemonic) ) {
-      return false;
-    }
-
-    mnemonicIndex = mnemonic - firstX86Ident;
-    if( mnemonicIndex > (lastX86Ident - firstX86Ident) ) {
-      return false;
-    }
-
-    formatIndex = formatStart[mnemonicIndex];
-    if( formatIndex > formatCount ) {
-      return false;
-    }
-
-    do {
-      if( formatTable[formatIndex].mnemonic != mnemonic ) {
-        return false;
-      }
-
-      param1 = formatTable[formatIndex].param[0];
-      param2 = formatTable[formatIndex].param[1];
-      param3 = formatTable[formatIndex].param[2];
-
-      if( (param3.first | param3.last | param2.first | param2.last) == 0 ) {
-        if( (param1.first <= memType) && (memType <= param1.last) ) {
-          break;
-        }
-      }
-
-      formatIndex++;
-    } while( formatIndex < formatCount );
-
-    encodeIndex = formatTable[formatIndex].index;
-    if( encodeIndex >= encodeCount ) {
-      return false;
-    }
-
-    // Initialize instruction structure
-    instruction.fields = encodeTable[encodeIndex].fields;
-
-    instruction.prefix[0] = encodeTable[encodeIndex].prefix[0];
-    instruction.prefix[1] = encodeTable[encodeIndex].prefix[1];
-    instruction.prefix[2] = encodeTable[encodeIndex].prefix[2];
-    instruction.prefix[3] = encodeTable[encodeIndex].prefix[3];
-
-    instruction.opcode[0] = encodeTable[encodeIndex].opcode[0];
-    instruction.opcode[1] = encodeTable[encodeIndex].opcode[1];
-    instruction.opcode[2] = encodeTable[encodeIndex].opcode[2];
-
-    instruction.modRM = encodeTable[encodeIndex].modRM;
-
-    switch( instruction.fields & (hasOpcode1 | hasOpcode2 | hasOpcode3) ) {
-    case hasOpcode3:
-      opIndex++;
-    case hasOpcode2:
-      opIndex++;
-    }
-
-    switch( segOverride & x86OperandMask ) {
-    case 0:
-      break;
-
-    case x86SReg:
-      if( instruction.fields & hasSegOverride ) {
-        return false;
-      }
-
-      segIndex = segOverride - firstX86SReg;
-      if( segIndex > (lastX86SReg - firstX86SReg) ) {
-        return false;
-      }
-
-      instruction.fields |= hasSegOverride;
-      instruction.prefix[indexSegOverride] = x86SegPrefixes[segIndex];
-      break;
-
-    default:
-      return false;
-    }
-
-    encodeResult = false;
-    switch( (addr->baseReg | addr->indexReg) & x86OperandMask ) {
-    case 0:
-      encodeResult = true;
-      break;
-
-    case x86Reg16:
-      encodeResult = x86EncodeAddr16(&instruction, addr);
-      break;
-
-    case x86Reg32:
-      encodeResult = x86EncodeAddr32(&instruction, addr);
-      break;
-    }
-
-    if( !encodeResult ) {
-      return false;
-    }
-
-    // Mnemonic/Opcode transforms
-    switch( encodeTable[encodeIndex].xformOp ) {
-    case 0:
-      break;
-
-    case xformOpW:
-      opWBit = 0x01;
-
-    case xformSizeW:
-      memBits = 0;
-      switch( memType ) {
-      case x86Mem16:
-        memBits = 16;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      case x86Mem32:
-        memBits = 32;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      default:
-        return false;
-      }
-      if( target.bits != memBits ) {
-        instruction.fields |= hasOperandSize;
-        instruction.prefix[indexOperandSize] = target.operandWPrefix;
-      }
-      break;
-
-    default:
-      return false;
-    }
-
-    // Unused parameter validation
-    if( encodeTable[encodeIndex].xform[0] ||
-        encodeTable[encodeIndex].xform[1] ||
-        encodeTable[encodeIndex].xform[2] ) {
-      return false;
-    }
-
-    return x86Emit(binFile, &instruction);
-  }
-
-  bool x86GenOpImm( FILE* binFile, unsigned mnemonic, unsigned immType, unsigned imm ) {
-    x86Instruction instruction = {};
-    size_t mnemonicIndex;
-    size_t formatIndex;
-    size_t encodeIndex;
-    x86FormatParam param1;
-    x86FormatParam param2;
-    x86FormatParam param3;
-    unsigned opIndex = 0;
-    unsigned immBits;
-    uint8_t opWBit = 0;
-
-    if( !(binFile && mnemonic) ) {
-      return false;
-    }
-
-    mnemonicIndex = mnemonic - firstX86Ident;
-    if( mnemonicIndex > (lastX86Ident - firstX86Ident) ) {
-      return false;
-    }
-
-    formatIndex = formatStart[mnemonicIndex];
-    if( formatIndex > formatCount ) {
-      return false;
-    }
-
-    do {
-      if( formatTable[formatIndex].mnemonic != mnemonic ) {
-        return false;
-      }
-
-      param1 = formatTable[formatIndex].param[0];
-      param2 = formatTable[formatIndex].param[1];
-      param3 = formatTable[formatIndex].param[2];
-
-      if( (param3.first | param3.last | param2.first | param2.last) == 0 ) {
-        if( (param1.first <= immType) && (immType <= param1.last) ) {
-          break;
-        }
-      }
-
-      formatIndex++;
-    } while( formatIndex < formatCount );
-
-    encodeIndex = formatTable[formatIndex].index;
-    if( encodeIndex >= encodeCount ) {
-      return false;
-    }
-
-    // Initialize instruction structure
-    instruction.fields = encodeTable[encodeIndex].fields;
-
-    switch( immType ) {
-    case 0:
-      break;
-
-    case valInt8:
-    case valUint8:
-      instruction.fields |= hasImm8;
-      break;
-
-    case valInt16:
-    case valUint16:
-      instruction.fields |= hasImm16;
-      break;
-
-    case valInt32:
-    case valUint32:
-      instruction.fields |= hasImm32;
-      break;
-
-    default:
-      return false;
-    }
-
-    instruction.prefix[0] = encodeTable[encodeIndex].prefix[0];
-    instruction.prefix[1] = encodeTable[encodeIndex].prefix[1];
-    instruction.prefix[2] = encodeTable[encodeIndex].prefix[2];
-    instruction.prefix[3] = encodeTable[encodeIndex].prefix[3];
-
-    instruction.opcode[0] = encodeTable[encodeIndex].opcode[0];
-    instruction.opcode[1] = encodeTable[encodeIndex].opcode[1];
-    instruction.opcode[2] = encodeTable[encodeIndex].opcode[2];
-
-    instruction.modRM = encodeTable[encodeIndex].modRM;
-
-    instruction.immediate = imm;
-
-    switch( instruction.fields & (hasOpcode1 | hasOpcode2 | hasOpcode3) ) {
-    case hasOpcode3:
-      opIndex++;
-    case hasOpcode2:
-      opIndex++;
-    }
-
-    // Mnemonic/Opcode transforms
-    switch( encodeTable[encodeIndex].xformOp ) {
-    case 0:
-      break;
-
-    case xformOpW:
-      opWBit = 0x01;
-
-    case xformSizeW:
-      immBits = 0;
-      switch( immType ) {
-      case valInt16:
-      case valUint16:
-        immBits = 16;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      case valInt32:
-      case valUint32:
-        immBits = 32;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      default:
-        return false;
-      }
-      if( target.bits != immBits ) {
-        instruction.fields |= hasOperandSize;
-        instruction.prefix[indexOperandSize] = target.operandWPrefix;
-      }
-      break;
-
-    default:
-      return false;
-    }
-
-    // Immediate transforms
-    switch( encodeTable[encodeIndex].xform[0] ) {
-    case 0:
-      break;
-
-    case xformImmS8:
-      switch( immType ) {
-      case valInt16:
-      case valInt32:
-      case valUint16:
-      case valUint32:
-        if( ((int)imm >= -128) && ((int)imm <= 127) ) {
-          instruction.fields &= (~hasImm32);
-          instruction.fields |= hasImm8;
-          instruction.opcode[opIndex] |= (1 << 1);
-        }
-      }
-      break;
-
-    default:
-      return false;
-    }
-
-    // Unused parameter validation
-    if( (encodeTable[encodeIndex].xform[1] |
-        encodeTable[encodeIndex].xform[2]) != 0 ) {
-      return false;
-    }
-
-    return x86Emit(binFile, &instruction);
-  }
-
-  bool x86GenOpDisp( FILE* binFile, unsigned mnemonic, unsigned dispType, int displacement ) {
-    x86Instruction instruction = {};
-
-    if( dispType == 0 ) {
-      dispType = x86Near;
-      if( (displacement >= -128) && (displacement <= 127) ) {
-        dispType = x86Short;
-      }
-    }
-
-    switch( mnemonic ) {
-    case x86Call:
-      if( dispType != x86Near ) {
-        return false;
-      }
-      instruction.opcode[0] = 0xE8;
-      break;
-
-    case x86Jmp:
-      instruction.opcode[0] = 0xE9;
-      if( dispType == x86Short ) {
-        instruction.opcode[0] = 0xEB;
-      }
-      break;
-
-    default:
-      return false;
-    }
-    instruction.fields |= hasOpcode1;
-
-    switch( dispType ) {
-    case x86Short:
-      instruction.fields |= hasDisp8;
-      instruction.displacement = (displacement - 2);
-      break;
-
-    case x86Near:
-      switch( target.bits ) {
-      case 16:
-        instruction.fields |= hasDisp16;
-        instruction.displacement = (displacement - 3);
-        break;
-      case 32:
-        instruction.fields |= hasDisp32;
-        instruction.displacement = (displacement - 5);
-        break;
-      default:
-        return false;
-      }
-      break;
-
-    default:
-      return false;
-    }
-
-    return x86Emit(binFile, &instruction);
-  }
-
-  bool x86GenOpFarOfs( FILE* binFile, unsigned mnemonic,
-      unsigned selector, unsigned offset ) {
-    x86Instruction instruction = {};
-
-    switch( mnemonic ) {
-    case x86Call:
-      instruction.opcode[0] = 0x9A;
-      break;
-
-    case x86Jmp:
-      instruction.opcode[0] = 0xEA;
-      break;
-
-    default:
-      return false;
-    }
-    instruction.fields |= hasOpcode1;
-
-    switch( target.bits ) {
-    case 16:
-      instruction.fields |= hasImm16 | hasDisp16;
-      instruction.immediate = selector;
-      instruction.displacement = offset;
-      break;
-
-    case 32:
-      instruction.fields |= hasImm16 | hasDisp32;
-      instruction.immediate = selector;
-      instruction.displacement = offset;
-      break;
-
-    default:
-      return false;
-    }
-
-    return x86Emit(binFile, &instruction);
-  }
-
-;;;
-  bool x86GenOpMemRegImm( FILE* binFile, unsigned mnemonic,
-      unsigned segOverride, x86Addr* addr,
-      unsigned srcReg, unsigned immediate ) {
-    x86Instruction instruction = {};
-    size_t mnemonicIndex;
-    size_t formatIndex;
-    size_t encodeIndex;
-    x86FormatParam param1;
-    x86FormatParam param2;
-    x86FormatParam param3;
-    unsigned opIndex = 0;
-    unsigned regBits;
-    unsigned segIndex;
-    bool encodeResult;
-    uint8_t opWBit = 0;
-
-    if( !(binFile && mnemonic) ) {
-      return false;
-    }
-
-    mnemonicIndex = mnemonic - firstX86Ident;
-    if( mnemonicIndex > (lastX86Ident - firstX86Ident) ) {
-      return false;
-    }
-
-    formatIndex = formatStart[mnemonicIndex];
-    if( formatIndex > formatCount ) {
-      return false;
-    }
-
-    while( formatIndex < formatCount ) {
-      if( formatTable[formatIndex].mnemonic != mnemonic ) {
-        return false;
-      }
-
-      param1 = formatTable[formatIndex].param[0];
-      param2 = formatTable[formatIndex].param[1];
-      param3 = formatTable[formatIndex].param[2];
-
-      if( (param3.first >= firstValUint) && (lastValUint <= param3.last) ) {
-        if( (param2.first <= srcReg) && (srcReg <= param2.last) ) {
-          if( (param1.first >= firstX86Mem) && (lastX86Mem <= param1.last) ) {
-            break;
-          }
-        }
-      }
-
-      formatIndex++;
-    }
-
-    encodeIndex = formatTable[formatIndex].index;
-    if( encodeIndex >= encodeCount ) {
-      return false;
-    }
-
-    // Initialize instruction structure
-    instruction.fields = encodeTable[encodeIndex].fields;
-
-    switch( srcReg & x86OperandMask ) {
-    case x86Reg8:
-      instruction.fields |= hasImm8;
-      break;
-
-    case x86Reg16:
-      instruction.fields |= hasImm16;
-      break;
-
-    case x86Reg32:
-      instruction.fields |= hasImm32;
-      break;
-
-    default:
-      return false;
-    }
-
-    instruction.prefix[0] = encodeTable[encodeIndex].prefix[0];
-    instruction.prefix[1] = encodeTable[encodeIndex].prefix[1];
-    instruction.prefix[2] = encodeTable[encodeIndex].prefix[2];
-    instruction.prefix[3] = encodeTable[encodeIndex].prefix[3];
-
-    instruction.opcode[0] = encodeTable[encodeIndex].opcode[0];
-    instruction.opcode[1] = encodeTable[encodeIndex].opcode[1];
-    instruction.opcode[2] = encodeTable[encodeIndex].opcode[2];
-
-    instruction.modRM = encodeTable[encodeIndex].modRM;
-
-    instruction.immediate = immediate;
-
-    switch( instruction.fields & (hasOpcode1 | hasOpcode2 | hasOpcode3) ) {
-    case hasOpcode3:
-      opIndex++;
-    case hasOpcode2:
-      opIndex++;
-    }
-
-    switch( segOverride & x86OperandMask ) {
-    case 0:
-      break;
-
-    case x86SReg:
-      if( instruction.fields & hasSegOverride ) {
-        return false;
-      }
-
-      segIndex = segOverride - firstX86SReg;
-      if( segIndex > (lastX86SReg - firstX86SReg) ) {
-        return false;
-      }
-
-      instruction.fields |= hasSegOverride;
-      instruction.prefix[indexSegOverride] = x86SegPrefixes[segIndex];
-      break;
-
-    default:
-      return false;
-    }
-
-    encodeResult = false;
-    switch( (addr->baseReg | addr->indexReg) & x86OperandMask ) {
-    case 0:
-      encodeResult = true;
-      break;
-
-    case x86Reg16:
-      encodeResult = x86EncodeAddr16(&instruction, addr);
-      break;
-
-    case x86Reg32:
-      encodeResult = x86EncodeAddr32(&instruction, addr);
-      break;
-    }
-
-    if( !encodeResult ) {
-      return false;
-    }
-
-    // Mnemonic/Opcode transforms
-    switch( encodeTable[encodeIndex].xformOp ) {
-    case 0:
-      break;
-
-    case xformOpW:
-      opWBit = 0x01;
-
-    case xformSizeW:
-      regBits = 0;
-      switch( srcReg & x86OperandMask ) {
-      case x86Reg16:
-        regBits = 16;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      case x86Reg32:
-        regBits = 32;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      default:
-        return false;
-      }
-      if( target.bits != regBits ) {
-        instruction.fields |= hasOperandSize;
-        instruction.prefix[indexOperandSize] = target.operandWPrefix;
-      }
-      break;
-
-    default:
-      return false;
-    }
-
-    // Unused parameter validation
-    if( encodeTable[encodeIndex].xform[0] ) {
-      return false;
-    }
-
-    // Register transforms
-    switch( encodeTable[encodeIndex].xform[1] ) {
-    case 0:
-      break;
-
-    case xformModReg:
-      instruction.modRM |= (srcReg - (srcReg & x86OperandMask)) << 3;
-      break;
-
-    case xformRMReg:
-      instruction.modRM |= (srcReg - (srcReg & x86OperandMask));
-      break;
-
-    default:
-      return false;
-    }
-
-    // Immediate transforms
-    switch( encodeTable[encodeIndex].xform[2] ) {
-    case 0:
-      break;
-
-    case xformImmS8:
-      switch( srcReg & x86OperandMask ) {
-      case x86Reg16:
-      case x86Reg32:
-        if( ((int)immediate >= -128) && ((int)immediate <= 127) ) {
-          instruction.fields &= (~hasImm32);
-          instruction.fields |= hasImm8;
-          instruction.opcode[opIndex] |= (1 << 1);
-        }
-      }
-      break;
-
-    case xformToImm8:
-      instruction.fields &= (~hasImm32);
-      instruction.fields |= hasImm8;
-      break;
-
-    default:
-      return false;
-    }
-
-    return x86Emit(binFile, &instruction);
-  }
-
-  bool x86GenOpRegMemImm( FILE* binFile, unsigned mnemonic,
-      unsigned destReg, unsigned segOverride, x86Addr* addr,
-      unsigned immediate ) {
-    x86Instruction instruction = {};
-    size_t mnemonicIndex;
-    size_t formatIndex;
-    size_t encodeIndex;
-    x86FormatParam param1;
-    x86FormatParam param2;
-    x86FormatParam param3;
-    unsigned opIndex = 0;
-    unsigned regBits;
-    unsigned segIndex;
-    bool encodeResult;
-    uint8_t opWBit = 0;
-
-    if( !(binFile && mnemonic) ) {
-      return false;
-    }
-
-    mnemonicIndex = mnemonic - firstX86Ident;
-    if( mnemonicIndex > (lastX86Ident - firstX86Ident) ) {
-      return false;
-    }
-
-    formatIndex = formatStart[mnemonicIndex];
-    if( formatIndex > formatCount ) {
-      return false;
-    }
-
-    while( formatIndex < formatCount ) {
-      if( formatTable[formatIndex].mnemonic != mnemonic ) {
-        return false;
-      }
-
-      param1 = formatTable[formatIndex].param[0];
-      param2 = formatTable[formatIndex].param[1];
-      param3 = formatTable[formatIndex].param[2];
-
-      if( (param3.first >= firstValUint) && (lastValUint <= param3.last) ) {
-        if( (param2.first >= firstX86Mem) && (lastX86Mem <= param2.last) ) {
-          if( (param1.first <= destReg) && (destReg <= param1.last) ) {
-            break;
-          }
-        }
-      }
-
-      formatIndex++;
-    }
-
-    encodeIndex = formatTable[formatIndex].index;
-    if( encodeIndex >= encodeCount ) {
-      return false;
-    }
-
-    // Initialize instruction structure
-    instruction.fields = encodeTable[encodeIndex].fields;
-
-    switch( destReg & x86OperandMask ) {
-    case x86Reg8:
-      instruction.fields |= hasImm8;
-      break;
-
-    case x86Reg16:
-      instruction.fields |= hasImm16;
-      break;
-
-    case x86Reg32:
-      instruction.fields |= hasImm32;
-      break;
-
-    default:
-      return false;
-    }
-
-    instruction.prefix[0] = encodeTable[encodeIndex].prefix[0];
-    instruction.prefix[1] = encodeTable[encodeIndex].prefix[1];
-    instruction.prefix[2] = encodeTable[encodeIndex].prefix[2];
-    instruction.prefix[3] = encodeTable[encodeIndex].prefix[3];
-
-    instruction.opcode[0] = encodeTable[encodeIndex].opcode[0];
-    instruction.opcode[1] = encodeTable[encodeIndex].opcode[1];
-    instruction.opcode[2] = encodeTable[encodeIndex].opcode[2];
-
-    instruction.modRM = encodeTable[encodeIndex].modRM;
-
-    instruction.immediate = immediate;
-
-    switch( instruction.fields & (hasOpcode1 | hasOpcode2 | hasOpcode3) ) {
-    case hasOpcode3:
-      opIndex++;
-    case hasOpcode2:
-      opIndex++;
-    }
-
-    switch( segOverride & x86OperandMask ) {
-    case 0:
-      break;
-
-    case x86SReg:
-      if( instruction.fields & hasSegOverride ) {
-        return false;
-      }
-
-      segIndex = segOverride - firstX86SReg;
-      if( segIndex > (lastX86SReg - firstX86SReg) ) {
-        return false;
-      }
-
-      instruction.fields |= hasSegOverride;
-      instruction.prefix[indexSegOverride] = x86SegPrefixes[segIndex];
-      break;
-
-    default:
-      return false;
-    }
-
-    encodeResult = false;
-    switch( (addr->baseReg | addr->indexReg) & x86OperandMask ) {
-    case 0:
-      encodeResult = true;
-      break;
-
-    case x86Reg16:
-      encodeResult = x86EncodeAddr16(&instruction, addr);
-      break;
-
-    case x86Reg32:
-      encodeResult = x86EncodeAddr32(&instruction, addr);
-      break;
-    }
-
-    if( !encodeResult ) {
-      return false;
-    }
-
-    // Mnemonic/Opcode transforms
-    switch( encodeTable[encodeIndex].xformOp ) {
-    case 0:
-      break;
-
-    case xformOpW:
-      opWBit = 0x01;
-
-    case xformSizeW:
-      regBits = 0;
-      switch( destReg & x86OperandMask ) {
-      case x86Reg16:
-        regBits = 16;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      case x86Reg32:
-        regBits = 32;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      default:
-        return false;
-      }
-      if( target.bits != regBits ) {
-        instruction.fields |= hasOperandSize;
-        instruction.prefix[indexOperandSize] = target.operandWPrefix;
-      }
-      break;
-
-    default:
-      return false;
-    }
-
-    // Register transforms
-    switch( encodeTable[encodeIndex].xform[0] ) {
-    case 0:
-      break;
-
-    case xformModReg:
-      instruction.modRM |= (destReg - (destReg & x86OperandMask)) << 3;
-      break;
-
-    case xformRMReg:
-      instruction.modRM |= (destReg - (destReg & x86OperandMask));
-      break;
-
-    default:
-      return false;
-    }
-
-    // Unused parameter validation
-    if( encodeTable[encodeIndex].xform[1] ) {
-      return false;
-    }
-
-    // Immediate transforms
-    switch( encodeTable[encodeIndex].xform[2] ) {
-    case 0:
-      break;
-
-    case xformImmS8:
-      switch( destReg & x86OperandMask ) {
-      case x86Reg16:
-      case x86Reg32:
-        if( ((int)immediate >= -128) && ((int)immediate <= 127) ) {
-          instruction.fields &= (~hasImm32);
-          instruction.fields |= hasImm8;
-          instruction.opcode[opIndex] |= (1 << 1);
-        }
-      }
-      break;
-
-    case xformToImm8:
-      instruction.fields &= (~hasImm32);
-      instruction.fields |= hasImm8;
-      break;
-
-    default:
-      return false;
-    }
-
-    return x86Emit(binFile, &instruction);
-  }
-
-  bool x86GenOpRegRegReg( FILE* binFile, unsigned mnemonic, 
-      unsigned destReg, unsigned srcReg, unsigned valReg ) {
-    x86Instruction instruction = {};
-    size_t mnemonicIndex;
-    size_t formatIndex;
-    size_t encodeIndex;
-    x86FormatParam param1;
-    x86FormatParam param2;
-    x86FormatParam param3;
-    unsigned opIndex = 0;
-    unsigned regBits;
-    uint8_t  opWBit = 0;
-
-    if( !(binFile && mnemonic) ) {
-      return false;
-    }
-
-    mnemonicIndex = mnemonic - firstX86Ident;
-    if( mnemonicIndex > (lastX86Ident - firstX86Ident) ) {
-      return false;
-    }
-
-    formatIndex = formatStart[mnemonicIndex];
-    if( formatIndex > formatCount ) {
-      return false;
-    }
-
-    do {
-      if( formatTable[formatIndex].mnemonic != mnemonic ) {
-        return false;
-      }
-
-      param1 = formatTable[formatIndex].param[0];
-      param2 = formatTable[formatIndex].param[1];
-      param3 = formatTable[formatIndex].param[2];
-
-      if( (param3.first <= valReg) && (valReg <= param3.last) ) {
-        if( (param2.first <= srcReg) && (srcReg <= param2.last) ) {
-          if( (param1.first <= destReg) && (destReg <= param1.last) ) {
-            break;
-          }
-        }
-      }
-
-      formatIndex++;
-    } while( formatIndex < formatCount );
-
-    encodeIndex = formatTable[formatIndex].index;
-    if( encodeIndex >= encodeCount ) {
-      return false;
-    }
-
-    // Initialize instruction structure
-    instruction.fields = encodeTable[encodeIndex].fields;
-
-    instruction.prefix[0] = encodeTable[encodeIndex].prefix[0];
-    instruction.prefix[1] = encodeTable[encodeIndex].prefix[1];
-    instruction.prefix[2] = encodeTable[encodeIndex].prefix[2];
-    instruction.prefix[3] = encodeTable[encodeIndex].prefix[3];
-
-    instruction.opcode[0] = encodeTable[encodeIndex].opcode[0];
-    instruction.opcode[1] = encodeTable[encodeIndex].opcode[1];
-    instruction.opcode[2] = encodeTable[encodeIndex].opcode[2];
-
-    instruction.modRM = encodeTable[encodeIndex].modRM;
-
-    switch( instruction.fields & (hasOpcode1 | hasOpcode2 | hasOpcode3) ) {
-    case hasOpcode3:
-      opIndex++;
-    case hasOpcode2:
-      opIndex++;
-    }
-
-    // Mnemonic/Opcode transforms
-    switch( encodeTable[encodeIndex].xformOp ) {
-    case 0:
-      break;
-
-    case xformOpW:
-      opWBit = 0x01;
-
-    case xformSizeW:
-      regBits = 0;
-      switch( destReg & x86OperandMask ) {
-      case x86Reg16:
-        regBits = 16;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      case x86Reg32:
-        regBits = 32;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      default:
-        return false;
-      }
-      if( target.bits != regBits ) {
-        instruction.fields |= hasOperandSize;
-        instruction.prefix[indexOperandSize] = target.operandWPrefix;
-      }
-      break;
-
-    default:
-      return false;
-    }
-
-    // Destination register transforms
-    switch( encodeTable[encodeIndex].xform[0] ) {
-    case 0:
-      break;
-
-    case xformModReg:
-      instruction.modRM |= (destReg - (destReg & x86OperandMask)) << 3;
-      break;
-
-    case xformRMReg:
-      instruction.modRM |= (destReg - (destReg & x86OperandMask));
-      break;
-
-    default:
-      return false;
-    }
-
-    // Source register transforms
-    switch( encodeTable[encodeIndex].xform[1] ) {
-    case 0:
-      break;
-
-    case xformModReg:
-      instruction.modRM |= (srcReg - (srcReg & x86OperandMask)) << 3;
-      break;
-
-    case xformRMReg:
-      instruction.modRM |= (srcReg - (srcReg & x86OperandMask));
-      break;
-
-    default:
-      return false;
-    }
-
-    // Unused parameter validation
-    if( encodeTable[encodeIndex].xform[2] ) {
-      return false;
-    }
-
-    return x86Emit(binFile, &instruction);
-  }
-
-  bool x86GenOpRegRegImm( FILE* binFile, unsigned mnemonic,
-    unsigned destReg, unsigned srcReg, unsigned imm ) {
-    return false;
-  }
-
-  bool x86GenOpRegMem( FILE* binFile, unsigned mnemonic,
-      unsigned destReg, unsigned segOverride, x86Addr* addr ) {
-    x86Instruction instruction = {};
-    size_t mnemonicIndex;
-    size_t formatIndex;
-    size_t encodeIndex;
-    x86FormatParam param1;
-    x86FormatParam param2;
-    x86FormatParam param3;
-    unsigned opIndex = 0;
-    unsigned regBits;
-    unsigned segIndex;
-    bool encodeResult;
-    uint8_t opWBit = 0;
-
-    if( !(binFile && mnemonic) ) {
-      return false;
-    }
-
-    mnemonicIndex = mnemonic - firstX86Ident;
-    if( mnemonicIndex > (lastX86Ident - firstX86Ident) ) {
-      return false;
-    }
-
-    formatIndex = formatStart[mnemonicIndex];
-    if( formatIndex > formatCount ) {
-      return false;
-    }
-
-    do {
-      if( formatTable[formatIndex].mnemonic != mnemonic ) {
-        return false;
-      }
-
-      param1 = formatTable[formatIndex].param[0];
-      param2 = formatTable[formatIndex].param[1];
-      param3 = formatTable[formatIndex].param[2];
-
-      if( (param3.first | param3.last) == 0 ) {
-        if( (param2.first >= firstX86Mem) && (lastX86Mem <= param2.last) ) {
-          if( (param1.first <= destReg) && (destReg <= param1.last) ) {
-            break;
-          }
-        }
-      }
-
-      formatIndex++;
-    } while( formatIndex < formatCount );
-
-    encodeIndex = formatTable[formatIndex].index;
-    if( encodeIndex >= encodeCount ) {
-      return false;
-    }
-
-    // Initialize instruction structure
-    instruction.fields = encodeTable[encodeIndex].fields;
-
-    instruction.prefix[0] = encodeTable[encodeIndex].prefix[0];
-    instruction.prefix[1] = encodeTable[encodeIndex].prefix[1];
-    instruction.prefix[2] = encodeTable[encodeIndex].prefix[2];
-    instruction.prefix[3] = encodeTable[encodeIndex].prefix[3];
-
-    instruction.opcode[0] = encodeTable[encodeIndex].opcode[0];
-    instruction.opcode[1] = encodeTable[encodeIndex].opcode[1];
-    instruction.opcode[2] = encodeTable[encodeIndex].opcode[2];
-
-    instruction.modRM = encodeTable[encodeIndex].modRM;
-
-    switch( instruction.fields & (hasOpcode1 | hasOpcode2 | hasOpcode3) ) {
-    case hasOpcode3:
-      opIndex++;
-    case hasOpcode2:
-      opIndex++;
-    }
-
-    switch( segOverride & x86OperandMask ) {
-    case 0:
-      break;
-
-    case x86SReg:
-      if( instruction.fields & hasSegOverride ) {
-        return false;
-      }
-
-      segIndex = segOverride - firstX86SReg;
-      if( segIndex > (lastX86SReg - firstX86SReg) ) {
-        return false;
-      }
-
-      instruction.fields |= hasSegOverride;
-      instruction.prefix[indexSegOverride] = x86SegPrefixes[segIndex];
-      break;
-
-    default:
-      return false;
-    }
-
-    encodeResult = false;
-    switch( (addr->baseReg | addr->indexReg) & x86OperandMask ) {
-    case 0:
-      encodeResult = true;
-      break;
-
-    case x86Reg16:
-      encodeResult = x86EncodeAddr16(&instruction, addr);
-      break;
-
-    case x86Reg32:
-      encodeResult = x86EncodeAddr32(&instruction, addr);
-      break;
-    }
-
-    if( !encodeResult ) {
-      return false;
-    }
-
-    // Mnemonic/Opcode transforms
-    switch( encodeTable[encodeIndex].xformOp ) {
-    case 0:
-      break;
-
-    case xformOpW:
-      opWBit = 0x01;
-
-    case xformSizeW:
-      regBits = 0;
-      switch( destReg & x86OperandMask ) {
-      case x86Reg16:
-        regBits = 16;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      case x86Reg32:
-        regBits = 32;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      default:
-        return false;
-      }
-      if( target.bits != regBits ) {
-        instruction.fields |= hasOperandSize;
-        instruction.prefix[indexOperandSize] = target.operandWPrefix;
-      }
-      break;
-
-    default:
-      return false;
-    }
-
-    // Register transforms
-    switch( encodeTable[encodeIndex].xform[0] ) {
-    case 0:
-      break;
-
-    case xformModReg:
-      instruction.modRM |= (destReg - (destReg & x86OperandMask)) << 3;
-      break;
-
-    case xformRMReg:
-      instruction.modRM |= (destReg - (destReg & x86OperandMask));
-      break;
-
-    default:
-      return false;
-    }
-
-    // Unused parameter validation
-    if( encodeTable[encodeIndex].xform[1] ||
-        encodeTable[encodeIndex].xform[2] ) {
-      return false;
-    }
-
-    return x86Emit(binFile, &instruction);
-  }
-
-  bool x86GenOpMemReg( FILE* binFile, unsigned mnemonic,
-    unsigned segOverride, x86Addr* addr, unsigned srcReg ) {
-    return false;
-  }
-
-  bool x86GenOpRegReg( FILE* binFile,
-    unsigned mnemonic, unsigned destReg, unsigned srcReg ) {
-    x86Instruction instruction = {};
-    size_t mnemonicIndex;
-    size_t formatIndex;
-    size_t encodeIndex;
-    x86FormatParam param1;
-    x86FormatParam param2;
-    x86FormatParam param3;
-    unsigned opIndex = 0;
-    unsigned regBits;
-    uint8_t opWBit = 0;
-
-    if( !(binFile && mnemonic) ) {
-      return false;
-    }
-
-    mnemonicIndex = mnemonic - firstX86Ident;
-    if( mnemonicIndex > (lastX86Ident - firstX86Ident) ) {
-      return false;
-    }
-
-    formatIndex = formatStart[mnemonicIndex];
-    if( formatIndex > formatCount ) {
-      return false;
-    }
-
-    do {
-      if( formatTable[formatIndex].mnemonic != mnemonic ) {
-        return false;
-      }
-
-      param1 = formatTable[formatIndex].param[0];
-      param2 = formatTable[formatIndex].param[1];
-      param3 = formatTable[formatIndex].param[2];
-
-      if( (param3.first | param3.last) == 0 ) {
-        if( (param2.first <= srcReg) && (srcReg <= param2.last) ) {
-          if( (param1.first <= destReg) && (destReg <= param1.last) ) {
-            break;
-          }
-        }
-      }
-
-      formatIndex++;
-    } while( formatIndex < formatCount );
-
-    encodeIndex = formatTable[formatIndex].index;
-    if( encodeIndex >= encodeCount ) {
-      return false;
-    }
-
-    // Initialize instruction structure
-    instruction.fields = encodeTable[encodeIndex].fields;
-
-    instruction.prefix[0] = encodeTable[encodeIndex].prefix[0];
-    instruction.prefix[1] = encodeTable[encodeIndex].prefix[1];
-    instruction.prefix[2] = encodeTable[encodeIndex].prefix[2];
-    instruction.prefix[3] = encodeTable[encodeIndex].prefix[3];
-
-    instruction.opcode[0] = encodeTable[encodeIndex].opcode[0];
-    instruction.opcode[1] = encodeTable[encodeIndex].opcode[1];
-    instruction.opcode[2] = encodeTable[encodeIndex].opcode[2];
-
-    instruction.modRM = encodeTable[encodeIndex].modRM;
-
-    switch( instruction.fields & (hasOpcode1 | hasOpcode2 | hasOpcode3) ) {
-    case hasOpcode3:
-      opIndex++;
-    case hasOpcode2:
-      opIndex++;
-    }
-
-    // Mnemonic/Opcode transforms
-    switch( encodeTable[encodeIndex].xformOp ) {
-    case 0:
-      break;
-
-    case xformOpW:
-      opWBit = 0x01;
-
-    case xformSizeW:
-      regBits = 0;
-      switch( destReg & x86OperandMask ) {
-      case x86Reg16:
-        regBits = 16;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      case x86Reg32:
-        regBits = 32;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      default:
-        return false;
-      }
-      if( target.bits != regBits ) {
-        instruction.fields |= hasOperandSize;
-        instruction.prefix[indexOperandSize] = target.operandWPrefix;
-      }
-      break;
-
-    default:
-      return false;
-    }
-
-    // Destination register transforms
-    switch( encodeTable[encodeIndex].xform[0] ) {
-    case 0:
-      break;
-
-    case xformModReg:
-      instruction.modRM |= (destReg - (destReg & x86OperandMask)) << 3;
-      break;
-
-    case xformRMReg:
-      instruction.modRM |= (destReg - (destReg & x86OperandMask));
-      break;
-
-    default:
-      return false;
-    }
-
-    // Source register transforms
-    switch( encodeTable[encodeIndex].xform[1] ) {
-    case 0:
-      break;
-
-    case xformModReg:
-      instruction.modRM |= (srcReg - (srcReg & x86OperandMask)) << 3;
-      break;
-
-    case xformRMReg:
-      instruction.modRM |= (srcReg - (srcReg & x86OperandMask));
-      break;
-
-    default:
-      return false;
-    }
-
-    // Unused parameter validation
-    if( encodeTable[encodeIndex].xform[2] ) {
-      return false;
-    }
-
-    return x86Emit(binFile, &instruction);
-  }
-
-  bool x86GenOpMemImm( FILE* binFile,
-    unsigned mnemonic, unsigned segOverride, x86Addr* addr32, unsigned imm ) {
-    return false;
-  }
-
-  bool x86GenOpRegImm( FILE* binFile, unsigned mnemonic, unsigned destReg, unsigned immediate ) {
-    x86Instruction instruction = {};
-    size_t mnemonicIndex;
-    size_t formatIndex;
-    size_t encodeIndex;
-    x86FormatParam param1;
-    x86FormatParam param2;
-    x86FormatParam param3;
-    unsigned opIndex = 0;
-    unsigned regBits;
-    uint8_t opWBit = 0;
-
-    if( !(binFile && mnemonic) ) {
-      return false;
-    }
-
-    mnemonicIndex = mnemonic - firstX86Ident;
-    if( mnemonicIndex > (lastX86Ident - firstX86Ident) ) {
-      return false;
-    }
-
-    formatIndex = formatStart[mnemonicIndex];
-    if( formatIndex > formatCount ) {
-      return false;
-    }
-
-    do {
-      if( formatTable[formatIndex].mnemonic != mnemonic ) {
-        return false;
-      }
-
-      param1 = formatTable[formatIndex].param[0];
-      param2 = formatTable[formatIndex].param[1];
-      param3 = formatTable[formatIndex].param[2];
-
-      if( (param3.first | param3.last) == 0 ) {
-        if( (param2.first <= firstValUint) && (lastValUint <= param2.last) ) {
-          if( (param1.first <= destReg) && (destReg <= param1.last) ) {
-            break;
-          }
-        }
-      }
-
-      formatIndex++;
-    } while( formatIndex < formatCount );
-
-    encodeIndex = formatTable[formatIndex].index;
-    if( encodeIndex >= encodeCount ) {
-      return false;
-    }
-
-    // Initialize instruction structure
-    instruction.fields = encodeTable[encodeIndex].fields;
-
-    switch( destReg & x86OperandMask ) {
-    case x86Reg8:
-      instruction.fields |= hasImm8;
-      break;
-
-    case x86Reg16:
-      instruction.fields |= hasImm16;
-      break;
-
-    case x86Reg32:
-      instruction.fields |= hasImm32;
-      break;
-
-    default:
-      return false;
-    }
-
-    instruction.prefix[0] = encodeTable[encodeIndex].prefix[0];
-    instruction.prefix[1] = encodeTable[encodeIndex].prefix[1];
-    instruction.prefix[2] = encodeTable[encodeIndex].prefix[2];
-    instruction.prefix[3] = encodeTable[encodeIndex].prefix[3];
-
-    instruction.opcode[0] = encodeTable[encodeIndex].opcode[0];
-    instruction.opcode[1] = encodeTable[encodeIndex].opcode[1];
-    instruction.opcode[2] = encodeTable[encodeIndex].opcode[2];
-
-    instruction.modRM = encodeTable[encodeIndex].modRM;
-
-    instruction.immediate = immediate;
-
-    switch( instruction.fields & (hasOpcode1 | hasOpcode2 | hasOpcode3) ) {
-    case hasOpcode3:
-      opIndex++;
-    case hasOpcode2:
-      opIndex++;
-    }
-
-    // Mnemonic/Opcode transforms
-    switch( encodeTable[encodeIndex].xformOp ) {
-    case 0:
-      break;
-
-    case xformOpW:
-      opWBit = 0x01;
-
-    case xformSizeW:
-      regBits = 0;
-      switch( destReg & x86OperandMask ) {
-      case x86Reg16:
-        regBits = 16;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      case x86Reg32:
-        regBits = 32;
-        instruction.opcode[opIndex] |= opWBit;
-        break;
-      default:
-        return false;
-      }
-      if( target.bits != regBits ) {
-        instruction.fields |= hasOperandSize;
-        instruction.prefix[indexOperandSize] = target.operandWPrefix;
-      }
-      break;
-
-    default:
-      return false;
-    }
-
-    // Register transforms
-    switch( encodeTable[encodeIndex].xform[0] ) {
-    case 0:
-      break;
-
-    case xformModReg:
-      instruction.modRM |= (destReg - (destReg & x86OperandMask)) << 3;
-      break;
-
-    case xformRMReg:
-      instruction.modRM |= (destReg - (destReg & x86OperandMask));
-      break;
-
-    default:
-      return false;
-    }
-
-    // Immediate transforms
-    switch( encodeTable[encodeIndex].xform[1] ) {
-    case 0:
-      break;
-
-    case xformImmS8:
-      switch( destReg & x86OperandMask ) {
-      case x86Reg16:
-      case x86Reg32:
-        if( ((int)immediate >= -128) && ((int)immediate <= 127) ) {
-          instruction.fields &= (~hasImm32);
-          instruction.fields |= hasImm8;
-          instruction.opcode[opIndex] |= (1 << 1);
-        }
-      }
-      break;
-
-    default:
-      return false;
-    }
-
-    // Unused parameter validation
-    if( encodeTable[encodeIndex].xform[2] != 0 ) {
-      return false;
-    }
-
-    return x86Emit(binFile, &instruction);
-  }
-
-/*
- *  Backpatch implementation
- */
 
 /*
  *  Expression parser implementation
