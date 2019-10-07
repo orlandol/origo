@@ -16,6 +16,7 @@
   typedef struct rstring rstring;
 
   rstring* retFileName = NULL;
+  rstring* asmFileName = NULL;
   rstring* exeFileName = NULL;
 
 /*
@@ -1131,6 +1132,10 @@
  */
 
 /*
+ *  Assembler out declarations
+ */
+
+/*
  *  Parser declarations
  */
 
@@ -1144,7 +1149,13 @@
   }
 
   void PrintUsage() {
-    printf( "usage: origo source[.ret] [binary[.ext]]\n" );
+//    printf( "usage: origo source[.ret] [binary[.ext]]\n" );
+    printf( "usage: origo source.ret binary.ext\n" ); // Temporary
+  }
+
+  void ExitError( unsigned errorCode, char* errorText ) {
+    ///TODO: Translate errorCode to string
+    ///TODO: Print error code string and text
   }
 
 int main( int argc, char* argv[] ) {
@@ -1153,7 +1164,8 @@ int main( int argc, char* argv[] ) {
 
   PrintBanner();
 
-  if( argc < 2 ) {
+//  if( argc < 2 ) {
+  if( argc < 3 ) { ///TODO: Derive asm and destination file names
     PrintUsage();
     return 1;
   }
@@ -1166,8 +1178,22 @@ int main( int argc, char* argv[] ) {
     ///TODO: If parameter and/or extension not specified, extract base file name, and append ".exe"
   }
 
-  printf( "retFileName = '%s'\n", rstrtext(retFileName) );
-  printf( "exeFileName = '%s'\n", rstrtext(exeFileName) );
+;;;
+printf( "retFileName = '%s'\n", rstrtext(retFileName) );
+printf( "exeFileName = '%s'\n", rstrtext(exeFileName) );
+
+  retSource = OpenRetSource(retFileName);
+  if( retSource == NULL ) {
+    ExitError( unableToOpen, retFileName );
+  }
+
+  asmOut = CreateAsmOut(asmFileName);
+  if( asmOut == NULL ) {
+    ExitError( unableToCreate, asmFileName );
+  }
+
+  CloseRet( &retSource );
+  CloseAsm( &asmOut );
 
   return 0;
 }
@@ -2109,6 +2135,10 @@ int main( int argc, char* argv[] ) {
 
     return token;
   }
+
+/*
+ *  Assembler out implementation
+ */
 
 /*
  *  Expression parser implementation
