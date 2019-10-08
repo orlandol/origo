@@ -380,6 +380,22 @@
   const size_t keywordCount = sizeof(keyword) / sizeof(keyword);
 
 /*
+ *  System helper definitions
+ */
+
+/*
+ *  Error reporting declarations
+ */
+
+  enum ErrorCodes {
+    noError = 0,
+    unableToOpen,
+    unableToCreate
+  };
+
+  void ExitError( unsigned errorCode, char* errorText );
+
+/*
  *  String declarations
  */
 
@@ -1132,8 +1148,22 @@
  */
 
 /*
- *  Assembler out declarations
+ *  Assembler generation declarations
  */
+
+  typedef struct AsmGen {
+    FILE* asmHandle;
+    FILE* importHandle;
+    FILE* dataHandle;
+    FILE* constHandle;
+    FILE* bssHandle;
+    rstring* fileName;
+  } AsmGen;
+
+  AsmGen* CreateAsm( char* fileName, size_t nameLength );
+  void CloseAsm( AsmGen** source );
+
+  bool AsmGenOp( AsmGen* asmGen, unsigned op );
 
 /*
  *  Parser declarations
@@ -1153,14 +1183,12 @@
     printf( "usage: origo source.ret binary.ext\n" ); // Temporary
   }
 
-  void ExitError( unsigned errorCode, char* errorText ) {
-    ///TODO: Translate errorCode to string
-    ///TODO: Print error code string and text
-  }
-
 int main( int argc, char* argv[] ) {
   argCount = argc;
   argVar = argv;
+
+  RetFile* retSource = NULL;
+  AsmGen* asmGen = NULL;
 
   PrintBanner();
 
@@ -1178,22 +1206,44 @@ int main( int argc, char* argv[] ) {
     ///TODO: If parameter and/or extension not specified, extract base file name, and append ".exe"
   }
 
+  retFileName = rstrcopyc(argv[1], 0);
+
+  exeFileName = rstrcopyc(argv[2], 0);
+
+asmFileName = rsubstrc(argv[1], strlen(argv[1]), 0, rrevscanc(argv[1], '.'));
+
 ;;;
 printf( "retFileName = '%s'\n", rstrtext(retFileName) );
+printf( "asmFileName = '%s'\n", rstrtext(asmFileName) );
 printf( "exeFileName = '%s'\n", rstrtext(exeFileName) );
 
-  retSource = OpenRetSource(retFileName);
+  retSource = OpenRet(rstrtext(retFileName), rstrlen(retFileName));
   if( retSource == NULL ) {
-    ExitError( unableToOpen, retFileName );
+    ExitError( unableToOpen, rstrtext(retFileName) );
   }
 
-  asmOut = CreateAsmOut(asmFileName);
-  if( asmOut == NULL ) {
-    ExitError( unableToCreate, asmFileName );
+  asmGen = CreateAsm(rstrtext(asmFileName), rstrlen(asmFileName));
+  if( asmGen == NULL ) {
+    ExitError( unableToCreate, rstrtext(asmFileName) );
   }
 
   CloseRet( &retSource );
-  CloseAsm( &asmOut );
+  CloseAsm( &asmGen );
+
+  if( retFileName ) {
+    free( retFileName );
+    retFileName = NULL;
+  }
+
+  if( asmFileName ) {
+    free( asmFileName );
+    asmFileName = NULL;
+  }
+
+  if( exeFileName ) {
+    free( exeFileName );
+    exeFileName = NULL;
+  }
 
   return 0;
 }
@@ -1203,7 +1253,33 @@ printf( "exeFileName = '%s'\n", rstrtext(exeFileName) );
  */
 
 /*
- *  String declarations
+ *  System helper implementation
+ */
+
+/*
+ *  Error reporting implementation
+ */
+
+  const char* errorString[] = {
+    "No error",
+    "Unable to open",
+    "Unable to create"
+  };
+
+  const size_t errorCount = sizeof(errorString) / sizeof(errorString[0]);
+
+  void ExitError( unsigned errorCode, char* errorText ) {
+    if( errorCode && (errorCode < errorCount) && errorText ) {
+      printf( "ERROR(%u) %s: %s\n", errorCode, errorString[errorCode], errorText );
+    } else if( errorCode ) {
+      printf( "Unknown error code %u\n", errorCode );
+    }
+
+    exit( errorCode );
+  }
+
+/*
+ *  String implementation
  */
 
   inline size_t rstrlen( rstring* source ) {
@@ -2137,12 +2213,106 @@ printf( "exeFileName = '%s'\n", rstrtext(exeFileName) );
   }
 
 /*
- *  Assembler out implementation
+ *  Expression parser implementation
  */
 
 /*
- *  Expression parser implementation
+ *  Assembler generation declarations
  */
+
+;;;
+  AsmGen* CreateAsm( char* fileName, size_t nameLength ) {
+    AsmGen* newGen = NULL;
+
+    if( !(fileName && (*fileName)) ) {
+      goto ReturnError;
+    }
+
+    newGen = calloc(1, sizeof(AsmGen));
+    if( newGen == NULL ) {
+      goto ReturnError;
+    }
+
+    newGen->fileName = rstrcopyc(fileName, nameLength);
+    if( newGen->fileName == NULL ) {
+      goto ReturnError;
+    }
+
+    newGen->asmHandle = fopen(fileName, "rb");
+    if( newGen->asmHandle == NULL ) {
+      goto ReturnError;
+    }
+
+    newGen->importHandle = fopen("import.inc", "wb");
+    if( newGen->importHandle == NULL ) {
+      goto ReturnError;
+    }
+
+    newGen->dataHandle = fopen("data.inc", "wb");
+    if( newGen->dataHandle == NULL ) {
+      goto ReturnError;
+    }
+
+    newGen->constHandle = fopen("const.inc", "wb");
+    if( newGen->constHandle == NULL ) {
+      goto ReturnError;
+    }
+
+    newGen->bssHandle = fopen("bss.inc", "wb");
+    if( newGen->bssHandle == NULL ) {
+      goto ReturnError;
+    }
+
+    return newGen;
+
+  ReturnError:
+    CloseAsm( &newGen );
+
+    return NULL;
+  }
+
+  void CloseAsm( AsmGen** asmGen ) {
+    if( asmGen ) {
+      if( (*asmGen) ) {
+        if( (*asmGen)->asmHandle ) {
+          fclose( (*asmGen)->asmHandle );
+          (*asmGen)->asmHandle = NULL;
+        }
+
+        if( (*asmGen)->importHandle ) {
+          fclose( (*asmGen)->importHandle );
+          (*asmGen)->importHandle = NULL;
+        }
+
+        if( (*asmGen)->dataHandle ) {
+          fclose( (*asmGen)->dataHandle );
+          (*asmGen)->dataHandle = NULL;
+        }
+
+        if( (*asmGen)->constHandle ) {
+          fclose( (*asmGen)->constHandle );
+          (*asmGen)->constHandle = NULL;
+        }
+
+        if( (*asmGen)->bssHandle ) {
+          fclose( (*asmGen)->bssHandle );
+          (*asmGen)->bssHandle = NULL;
+        }
+
+        if( (*asmGen)->fileName ) {
+          free( (*asmGen)->fileName );
+          (*asmGen)->fileName = NULL;
+        }
+
+        free( (*asmGen) );
+        (*asmGen) = NULL;
+      }
+    }
+  }
+
+  bool AsmGenOp( AsmGen* asmGen, unsigned op ) {
+    return false;
+  }
 
 /*
  *  Parser implementation
