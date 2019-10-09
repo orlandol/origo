@@ -1210,7 +1210,7 @@ int main( int argc, char* argv[] ) {
 
   exeFileName = rstrcopyc(argv[2], 0);
 
-asmFileName = rsubstrc(argv[1], strlen(argv[1]), 0, rrevscanc(argv[1], '.'));
+  asmFileName = rsubstr(retFileName, 0, rrevscan(retFileName, '.'));
 
 ;;;
 printf( "retFileName = '%s'\n", rstrtext(retFileName) );
@@ -1569,7 +1569,12 @@ printf( "exeFileName = '%s'\n", rstrtext(exeFileName) );
     size_t matchIndex;
 
     sourceLength = rstrlen(source);
-    sourceCh = rstrtext(source) + sourceLength;
+    if( sourceLength == 0 ) {
+      return (-1);
+    }
+    matchIndex = sourceLength - 1;
+
+    sourceCh = rstrtext(source) + matchIndex;
 
     if( source == NULL ) {
       return (-1);
@@ -1577,10 +1582,12 @@ printf( "exeFileName = '%s'\n", rstrtext(exeFileName) );
 
     while( sourceLength && (*sourceCh) ) {
       if( (*sourceCh) == matchCh ) {
-        return sourceLength;
+        return matchIndex;
       }
 
+      sourceCh--;
       sourceLength--;
+      matchIndex--;
     }
 
     return (-1);
