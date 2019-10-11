@@ -17,6 +17,7 @@
 
   rstring* retFileName = NULL;
   rstring* asmFileName = NULL;
+  rstring* objFileName = NULL;
   rstring* exeFileName = NULL;
 
 /*
@@ -390,7 +391,10 @@
   enum ErrorCodes {
     noError = 0,
     unableToOpen,
-    unableToCreate
+    unableToCreate,
+    unableToRun,
+    unableToBuild,
+    unableToLink
   };
 
   void ExitError( unsigned errorCode, char* errorText );
@@ -1179,8 +1183,20 @@
   }
 
   void PrintUsage() {
-//    printf( "usage: origo source[.ret] [binary[.ext]]\n" );
-    printf( "usage: origo source.ret binary.ext\n" ); // Temporary
+    printf( "usage: origo source[.ret] [binary[.ext]]\n" );
+  }
+
+  #include <process.h>
+  bool RunProgram( const char* programName, char* const programArgs[], int* exitCode ) {
+    int runResult = 0;
+
+    runResult = spawnvp(_P_WAIT, programName, programArgs);
+
+    if( runResult != -1 ) {
+      *exitCode = runResult;
+    }
+
+    return (runResult != -1);
   }
 
 int main( int argc, char* argv[] ) {
@@ -1190,36 +1206,49 @@ int main( int argc, char* argv[] ) {
   RetFile* retSource = NULL;
   AsmGen* asmGen = NULL;
 
+  rstring* tmpFileName = NULL;
+  size_t scanIndex = 0;
+
   PrintBanner();
 
-//  if( argc < 2 ) {
-  if( argc < 3 ) { ///TODO: Derive asm and destination file names
+  if( (argc < 2) || (argc > 3) ) {
     PrintUsage();
     return 1;
   }
 
-  if( argc >= 2 ) {
-    ///TODO: If file extension doesn't contain ".", then append ".ret"
-  }
-
-  if( argc >= 3 ) {
-    ///TODO: If parameter and/or extension not specified, extract base file name, and append ".exe"
-  }
-
-  retFileName = rstrcopyc(argv[1], 0);
-
-  exeFileName = rstrcopyc(argv[2], 0);
-
-  asmFileName = rsubstr(retFileName, 0, rrevscan(retFileName, '.'));
-
-;;;
-printf( "retFileName = '%s'\n", rstrtext(retFileName) );
-printf( "asmFileName = '%s'\n", rstrtext(asmFileName) );
-printf( "exeFileName = '%s'\n", rstrtext(exeFileName) );
-
+  /* Open and create files */
+  retFileName = rstrcopyc(argv[1], strlen(argv[1]));
   retSource = OpenRet(rstrtext(retFileName), rstrlen(retFileName));
   if( retSource == NULL ) {
+    scanIndex = rrevscanc(argv[1], '.');
+    if( scanIndex == -1 ) {
+      tmpFileName = rstrappendc(retFileName, ".ret", 0);
+      if( tmpFileName ) {
+        retFileName = tmpFileName;
+      }
+    }
+    retSource = OpenRet(rstrtext(retFileName), rstrlen(retFileName));
+  }
+  if( retSource == NULL ) {
     ExitError( unableToOpen, rstrtext(retFileName) );
+  }
+
+  /* Create assembler file and includes */
+  scanIndex = rrevscan(retFileName, '.');
+  if( scanIndex != -1 ) {
+    asmFileName = rsubstr(retFileName, 0, scanIndex - 1);
+    objFileName = rsubstr(retFileName, 0, scanIndex - 1);
+  } else {
+    asmFileName = rstrcopy(retFileName);
+    objFileName = rstrcopy(retFileName);
+  }
+  tmpFileName = rstrappendc(asmFileName, ".rxa", 0);
+  if( tmpFileName ) {
+    asmFileName = tmpFileName;
+  }
+  tmpFileName = rstrappendc(objFileName, ".obj", 0);
+  if( tmpFileName ) {
+    objFileName = tmpFileName;
   }
 
   asmGen = CreateAsm(rstrtext(asmFileName), rstrlen(asmFileName));
@@ -1227,9 +1256,69 @@ printf( "exeFileName = '%s'\n", rstrtext(exeFileName) );
     ExitError( unableToCreate, rstrtext(asmFileName) );
   }
 
+  /* Determine binary file name */
+  if( argc >= 3 ) {
+    exeFileName = rstrcopyc(argv[2], 0);
+  } else {
+    scanIndex = rrevscan(retFileName, '.');
+    if( scanIndex != -1 ) {
+      exeFileName = rsubstr(retFileName, 0, scanIndex - 1);
+    }
+  }
+  tmpFileName = rstrappendc(exeFileName, ".exe", 0);
+  if( tmpFileName ) {
+    exeFileName = tmpFileName;
+  }
+
+  /* Parse Retineo source */
+  printf( "\nParsing '%s'...\n", rstrtext(retFileName) );
+
+  // Begin: Temporary code to be replaced by parser
+  fprintf( asmGen->asmHandle, "\nrun:\n..start:\n" );
+  fprintf( asmGen->asmHandle, "\n  push    ebp\n  mov     ebp, esp\n" );
+
+  fprintf( asmGen->asmHandle, "\n  mov     esp, ebp\n  pop     ebp\n" );
+  fprintf( asmGen->asmHandle, "\n  push   dword 0\n  call   [ExitProcess]\n" );
+
+  fprintf( asmGen->importHandle, "\n  extern ExitProcess\n  import ExitProcess kernel32.dll\n" );
+
+  // End: Temporary code to be replaced by parser
+
   CloseRet( &retSource );
   CloseAsm( &asmGen );
 
+  /* Build assembler source */
+  printf( "\nBuilding '%s'...\n", rstrtext(asmFileName) );
+
+  char* nasmOptions[] = {
+    "-wno-other",
+    "-fobj",
+    rstrtext(asmFileName),
+    NULL
+  };
+  int nasmResult = 0;
+  if( (RunProgram("nasm.exe", nasmOptions, &nasmResult) == false) ||
+      nasmResult ) {
+    ExitError( unableToRun, "nasm.exe" );
+  }
+
+  /* Link executable */
+  printf( "\nLinking '%s'\n", rstrtext(exeFileName) );
+
+  char* alinkOptions[] = {
+    "-c",
+    "-oPE",
+    "-subsys console",
+    rstrtext(objFileName),
+    NULL
+  };
+  int alinkResult = 0;
+  if( (RunProgram("alink.exe", alinkOptions, &alinkResult) == false) ||
+      alinkResult ) {
+    ExitError( unableToRun, "alink.exe" );
+  }
+
+  /* Release resources */
   if( retFileName ) {
     free( retFileName );
     retFileName = NULL;
@@ -1263,7 +1352,10 @@ printf( "exeFileName = '%s'\n", rstrtext(exeFileName) );
   const char* errorString[] = {
     "No error",
     "Unable to open",
-    "Unable to create"
+    "Unable to create",
+    "Unable to run",
+    "Unable to build",
+    "Unable to link"
   };
 
   const size_t errorCount = sizeof(errorString) / sizeof(errorString[0]);
@@ -2245,27 +2337,30 @@ printf( "exeFileName = '%s'\n", rstrtext(exeFileName) );
       goto ReturnError;
     }
 
-    newGen->asmHandle = fopen(fileName, "rb");
+    newGen->asmHandle = fopen(fileName, "wb");
     if( newGen->asmHandle == NULL ) {
       goto ReturnError;
     }
+    fprintf( newGen->asmHandle, "\n  CPU 386\n  BITS 32\n" );
+    fprintf( newGen->asmHandle, "\nsegment .text use32\n" );
+    fprintf( newGen->asmHandle, "\n  %%include \"import.rxi\"\n" );
 
-    newGen->importHandle = fopen("import.inc", "wb");
+    newGen->importHandle = fopen("import.rxi", "wb");
     if( newGen->importHandle == NULL ) {
       goto ReturnError;
     }
 
-    newGen->dataHandle = fopen("data.inc", "wb");
+    newGen->dataHandle = fopen("data.rxi", "wb");
     if( newGen->dataHandle == NULL ) {
       goto ReturnError;
     }
 
-    newGen->constHandle = fopen("const.inc", "wb");
+    newGen->constHandle = fopen("const.rxi", "wb");
     if( newGen->constHandle == NULL ) {
       goto ReturnError;
     }
 
-    newGen->bssHandle = fopen("bss.inc", "wb");
+    newGen->bssHandle = fopen("bss.rxi", "wb");
     if( newGen->bssHandle == NULL ) {
       goto ReturnError;
     }
@@ -2282,6 +2377,10 @@ printf( "exeFileName = '%s'\n", rstrtext(exeFileName) );
     if( asmGen ) {
       if( (*asmGen) ) {
         if( (*asmGen)->asmHandle ) {
+          fprintf( (*asmGen)->asmHandle, "\nsegment .data use32\n\n  %%include \"data.rxi\"\n" );
+          fprintf( (*asmGen)->asmHandle, "\nsegment .rdata use32\n\n  %%include \"const.rxi\"\n" );
+          fprintf( (*asmGen)->asmHandle, "\nsegment .bss use32\n\n  %%include \"bss.rxi\"\n" );
+
           fclose( (*asmGen)->asmHandle );
           (*asmGen)->asmHandle = NULL;
         }
