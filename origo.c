@@ -1158,8 +1158,8 @@
   typedef struct AsmGen {
     FILE* asmHandle;
     FILE* importHandle;
-    FILE* dataHandle;
     FILE* constHandle;
+    FILE* dataHandle;
     FILE* bssHandle;
     rstring* fileName;
   } AsmGen;
@@ -1167,7 +1167,7 @@
   AsmGen* CreateAsm( char* fileName, size_t nameLength );
   void CloseAsm( AsmGen** source );
 
-  bool AsmGenOp( AsmGen* asmGen, unsigned op );
+  bool AsmGenOp( AsmGen* asmGen, unsigned mnemonic );
 
 /*
  *  Parser declarations
@@ -1274,14 +1274,25 @@ int main( int argc, char* argv[] ) {
   printf( "\nParsing '%s'...\n", rstrtext(retFileName) );
 
   // Begin: Temporary code to be replaced by parser
-  fprintf( asmGen->asmHandle, "\nrun:\n..start:\n" );
-  fprintf( asmGen->asmHandle, "\n  push    ebp\n  mov     ebp, esp\n" );
+  fprintf( asmGen->asmHandle,
+    "run:\n"
+    "..start:\n"
+    "\n"
+    "  push    ebp\n"
+    "  mov     ebp, esp\n"
+    "\n"
+    "  mov     esp, ebp\n"
+    "  pop     ebp\n"
+    "\n"
+    "  push   dword 123\n"
+    "  call   [ExitProcess]\n"
+  );
 
-  fprintf( asmGen->asmHandle, "\n  mov     esp, ebp\n  pop     ebp\n" );
-  fprintf( asmGen->asmHandle, "\n  push   dword 0\n  call   [ExitProcess]\n" );
-
-  fprintf( asmGen->importHandle, "\n  extern ExitProcess\n  import ExitProcess kernel32.dll\n" );
-
+  fprintf( asmGen->importHandle,
+    "\n"
+    "  extern ExitProcess\n"
+    "  import ExitProcess kernel32.dll\n"
+  );
   // End: Temporary code to be replaced by parser
 
   CloseRet( &retSource );
@@ -1291,7 +1302,7 @@ int main( int argc, char* argv[] ) {
   printf( "\nBuilding '%s'...\n", rstrtext(asmFileName) );
 
   char* nasmOptions[] = {
-    "-wno-other",
+    " ",
     "-fobj",
     rstrtext(asmFileName),
     NULL
@@ -1303,9 +1314,10 @@ int main( int argc, char* argv[] ) {
   }
 
   /* Link executable */
-  printf( "\nLinking '%s'\n", rstrtext(exeFileName) );
+  printf( "\nLinking '%s'...\n", rstrtext(exeFileName) );
 
   char* alinkOptions[] = {
+    " ",
     "-c",
     "-oPE",
     "-subsys console",
@@ -2341,22 +2353,31 @@ int main( int argc, char* argv[] ) {
     if( newGen->asmHandle == NULL ) {
       goto ReturnError;
     }
-    fprintf( newGen->asmHandle, "\n  CPU 386\n  BITS 32\n" );
-    fprintf( newGen->asmHandle, "\nsegment .text use32\n" );
-    fprintf( newGen->asmHandle, "\n  %%include \"import.rxi\"\n" );
+
+    ///TODO: Move to parser at program header
+    fprintf( newGen->asmHandle,
+      "\n"
+      "  CPU 386\n"
+      "  BITS 32\n"
+      "\n"
+      "  %%include \"import.rxi\"\n"
+      "\n"
+      "section .text use32\n"
+      "\n"
+    );
 
     newGen->importHandle = fopen("import.rxi", "wb");
     if( newGen->importHandle == NULL ) {
       goto ReturnError;
     }
 
-    newGen->dataHandle = fopen("data.rxi", "wb");
-    if( newGen->dataHandle == NULL ) {
+    newGen->constHandle = fopen("const.rxi", "wb");
+    if( newGen->constHandle == NULL ) {
       goto ReturnError;
     }
 
-    newGen->constHandle = fopen("const.rxi", "wb");
-    if( newGen->constHandle == NULL ) {
+    newGen->dataHandle = fopen("data.rxi", "wb");
+    if( newGen->dataHandle == NULL ) {
       goto ReturnError;
     }
 
@@ -2377,9 +2398,20 @@ int main( int argc, char* argv[] ) {
     if( asmGen ) {
       if( (*asmGen) ) {
         if( (*asmGen)->asmHandle ) {
-          fprintf( (*asmGen)->asmHandle, "\nsegment .data use32\n\n  %%include \"data.rxi\"\n" );
-          fprintf( (*asmGen)->asmHandle, "\nsegment .rdata use32\n\n  %%include \"const.rxi\"\n" );
-          fprintf( (*asmGen)->asmHandle, "\nsegment .bss use32\n\n  %%include \"bss.rxi\"\n" );
+          ///TODO: Move to parser at program EOF
+          fprintf( (*asmGen)->asmHandle,
+            "\n"
+            "section .rdata use32\n"
+            "\n"
+            "  %%include \"const.rxi\"\n"
+            "\n"
+            "section .data use32\n"
+            "\n"
+            "  %%include \"data.rxi\"\n"
+            "\n"
+            "section .bss use32\n"
+            "\n"
+            "  %%include \"bss.rxi\"\n" );
 
           fclose( (*asmGen)->asmHandle );
           (*asmGen)->asmHandle = NULL;
@@ -2390,14 +2422,14 @@ int main( int argc, char* argv[] ) {
           (*asmGen)->importHandle = NULL;
         }
 
-        if( (*asmGen)->dataHandle ) {
-          fclose( (*asmGen)->dataHandle );
-          (*asmGen)->dataHandle = NULL;
-        }
-
         if( (*asmGen)->constHandle ) {
           fclose( (*asmGen)->constHandle );
           (*asmGen)->constHandle = NULL;
+        }
+
+        if( (*asmGen)->dataHandle ) {
+          fclose( (*asmGen)->dataHandle );
+          (*asmGen)->dataHandle = NULL;
         }
 
         if( (*asmGen)->bssHandle ) {
@@ -2416,7 +2448,7 @@ int main( int argc, char* argv[] ) {
     }
   }
 
-  bool AsmGenOp( AsmGen* asmGen, unsigned op ) {
+  bool AsmGenOp( AsmGen* asmGen, unsigned mnemonic ) {
     return false;
   }
 
