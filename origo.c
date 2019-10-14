@@ -13,13 +13,6 @@
   int argCount;
   char** argVar;
 
-  typedef struct rstring rstring;
-
-  rstring* retFileName = NULL;
-  rstring* asmFileName = NULL;
-  rstring* objFileName = NULL;
-  rstring* exeFileName = NULL;
-
 /*
  *  Token declarations
  */
@@ -47,6 +40,8 @@
     rsvdIdent = (1 << 9),
       rsvdProgram,
       rsvdEnum,
+      rsvdType,
+      rsvdNewType,
       rsvdStruct,
       rsvdObject,
       rsvdPublic,
@@ -232,10 +227,9 @@
           lastX86Reg32 = x86RegEDI,
 
     // x86 mnemonic tokens
-    ///TODO: Rename x86Ident to x86Mnemonic
-    x86Ident = (6 << 9),
+    x86Mnemonic = (6 << 9),
       x86Call,
-        firstX86Ident = x86Call,
+        firstX86Mnemonic = x86Call,
       x86Push,
       x86Popf,
       x86Pushf,
@@ -352,7 +346,7 @@
       x86Std,
       x86Sti,
       x86Xlatb,
-        lastX86Ident = x86Xlatb,
+        lastX86Mnemonic = x86Xlatb,
 
     // x86 general keywords
     x86Keyword = (7 << 9),
@@ -372,24 +366,49 @@
     unsigned token;
   } Keyword;
 
-  const Keyword keyword[] = {
+  const Keyword keywordTable[] = {
     "end",     rsvdEnd,
+    "newtype", rsvdNewType,
     "program", rsvdProgram,
-    "run",     rsvdRun
+    "run",     rsvdRun,
+    "type",    rsvdType
   };
 
-  const size_t keywordCount = sizeof(keyword) / sizeof(keyword);
+  const size_t keywordCount = sizeof(keywordTable) / sizeof(keywordTable[0]);
+
+  unsigned FindKeyword( char* identifier );
 
 /*
- *  System helper definitions
+ *  System helper declarations
  */
+
+  bool RunProgram( const char* programName, char* const programArgs[], int* exitCode );
 
 /*
  *  Error reporting declarations
  */
 
+  // Logic warnings
+  enum WarningCodes {
+    noWarnings = 0
+  };
+
+  void Warning( unsigned line, unsigned column, unsigned warningCode );
+
+  // Syntax errors
+  enum ExpectedCodes {
+    nothingExpected = 0,
+    expectedProgram,
+    expectedIdentifier,
+    expectedTopLevel
+  };
+
+  void Expected( unsigned line, unsigned column, unsigned expectedCode );
+
+  // Program errors
   enum ErrorCodes {
     noError = 0,
+    setExitHandlerFailed,
     unableToOpen,
     unableToCreate,
     unableToRun,
@@ -397,7 +416,7 @@
     unableToLink
   };
 
-  void ExitError( unsigned errorCode, char* errorText );
+  void Error( unsigned errorCode, char* errorText );
 
 /*
  *  String declarations
@@ -414,6 +433,8 @@
 
   rstring* rstralloc( size_t reserveLength );
   rstring* rstrzalloc( size_t reserveLength );
+
+  void rstrclear( rstring* source );
 
   rstring* rstrcopy( rstring* source );
   rstring* rstrcopyc( char* source, size_t sourceLength );
@@ -1123,7 +1144,7 @@
     FILE* handle;
     rstring* fileName;
     unsigned line;
-    unsigned col;
+    unsigned column;
     char curCh;
     char nextCh;
   } RetFile;
@@ -1173,6 +1194,8 @@
  *  Parser declarations
  */
 
+  void ParseProgramHeader();
+
 /*
  *  Main program
  */
@@ -1186,25 +1209,46 @@
     printf( "usage: origo source[.ret] [binary[.ext]]\n" );
   }
 
-  #include <process.h>
-  bool RunProgram( const char* programName, char* const programArgs[], int* exitCode ) {
-    int runResult = 0;
+  rstring* retFileName = NULL;
+  rstring* asmFileName = NULL;
+  rstring* objFileName = NULL;
+  rstring* exeFileName = NULL;
 
-    runResult = spawnvp(_P_WAIT, programName, programArgs);
+  RetFile* retSource = NULL;
+  AsmGen* asmGen = NULL;
 
-    if( runResult != -1 ) {
-      *exitCode = runResult;
+  void Cleanup() {
+    if( retFileName ) {
+      free( retFileName );
+      retFileName = NULL;
     }
 
-    return (runResult != -1);
+    if( asmFileName ) {
+      free( asmFileName );
+      asmFileName = NULL;
+    }
+
+    if( objFileName ) {
+      free( objFileName );
+      objFileName = NULL;
+    }
+
+    if( exeFileName ) {
+      free( exeFileName );
+      exeFileName = NULL;
+    }
+
+    CloseRet( &retSource );
+    CloseRet( &asmGen );
   }
 
 int main( int argc, char* argv[] ) {
   argCount = argc;
   argVar = argv;
 
-  RetFile* retSource = NULL;
-  AsmGen* asmGen = NULL;
+  if( atexit(Cleanup) ) {
+    Error( setExitHandlerFailed, "" );
+  }
 
   rstring* tmpFileName = NULL;
   size_t scanIndex = 0;
@@ -1230,7 +1274,7 @@ int main( int argc, char* argv[] ) {
     retSource = OpenRet(rstrtext(retFileName), rstrlen(retFileName));
   }
   if( retSource == NULL ) {
-    ExitError( unableToOpen, rstrtext(retFileName) );
+    Error( unableToOpen, rstrtext(retFileName) );
   }
 
   /* Create assembler file and includes */
@@ -1253,7 +1297,7 @@ int main( int argc, char* argv[] ) {
 
   asmGen = CreateAsm(rstrtext(asmFileName), rstrlen(asmFileName));
   if( asmGen == NULL ) {
-    ExitError( unableToCreate, rstrtext(asmFileName) );
+    Error( unableToCreate, rstrtext(asmFileName) );
   }
 
   /* Determine binary file name */
@@ -1272,6 +1316,8 @@ int main( int argc, char* argv[] ) {
 
   /* Parse Retineo source */
   printf( "\nParsing '%s'...\n", rstrtext(retFileName) );
+
+  ParseProgramHeader( retSource, asmGen );
 
   // Begin: Temporary code to be replaced by parser
   fprintf( asmGen->asmHandle,
@@ -1302,23 +1348,21 @@ int main( int argc, char* argv[] ) {
   printf( "\nBuilding '%s'...\n", rstrtext(asmFileName) );
 
   char* nasmOptions[] = {
-    " ",
-    "-fobj",
+    " -fobj",
     rstrtext(asmFileName),
     NULL
   };
   int nasmResult = 0;
   if( (RunProgram("nasm.exe", nasmOptions, &nasmResult) == false) ||
       nasmResult ) {
-    ExitError( unableToRun, "nasm.exe" );
+    Error( unableToRun, "nasm.exe" );
   }
 
   /* Link executable */
   printf( "\nLinking '%s'...\n", rstrtext(exeFileName) );
 
   char* alinkOptions[] = {
-    " ",
-    "-c",
+    " -c",
     "-oPE",
     "-subsys console",
     rstrtext(objFileName),
@@ -1327,24 +1371,11 @@ int main( int argc, char* argv[] ) {
   int alinkResult = 0;
   if( (RunProgram("alink.exe", alinkOptions, &alinkResult) == false) ||
       alinkResult ) {
-    ExitError( unableToRun, "alink.exe" );
+    Error( unableToRun, "alink.exe" );
   }
 
   /* Release resources */
-  if( retFileName ) {
-    free( retFileName );
-    retFileName = NULL;
-  }
-
-  if( asmFileName ) {
-    free( asmFileName );
-    asmFileName = NULL;
-  }
-
-  if( exeFileName ) {
-    free( exeFileName );
-    exeFileName = NULL;
-  }
+  Cleanup();
 
   return 0;
 }
@@ -1353,16 +1384,96 @@ int main( int argc, char* argv[] ) {
  *  Token implementation
  */
 
+  unsigned FindKeyword( char* identifier ) {
+    size_t leftIndex = 0;
+    size_t rightIndex = keywordCount;
+    size_t keywordIndex = keywordCount / 2;
+    int    compareCode = 0;
+
+    if( !(identifier && (*identifier)) ) {
+      return 0;
+    }
+
+    while( leftIndex < rightIndex ) {
+printf( "%s ? %s\n", keywordTable[keywordIndex].name, identifier );
+      compareCode = strcmp(keywordTable[keywordIndex].name, identifier);
+      if( compareCode == 0 ) {
+        return keywordTable[keywordIndex].token;
+      }
+
+      if( compareCode > 0 ) {
+        rightIndex = keywordIndex;
+      } else {
+        leftIndex = keywordIndex + 1;
+      }
+
+      keywordIndex = (leftIndex + rightIndex) / 2;
+    }
+
+    return 0;
+  }
+
 /*
  *  System helper implementation
  */
+
+  #include <process.h>
+
+  bool RunProgram( const char* programName, char* const programArgs[], int* exitCode ) {
+    int runResult = 0;
+
+    runResult = spawnvp(_P_WAIT, programName, programArgs);
+
+    if( runResult != -1 ) {
+      *exitCode = runResult;
+    }
+
+    return (runResult != -1);
+  }
 
 /*
  *  Error reporting implementation
  */
 
+  // Logic warnings
+  const char* warningString[] = {
+    "No warning"
+  };
+
+  const size_t warningCount = sizeof(warningString) / sizeof(warningString[0]);
+
+  void Warning( unsigned line, unsigned column, unsigned warningCode ) {
+    if( warningCode && (warningCode < warningCount) ) {
+      printf( "Expected(L%u, C&u): %s\n", line, column, warningString[warningCode] );
+    } else if( warningCode ) {
+      printf( "Expected: Unknown code %u\n", warningCode );
+    }
+  }
+
+  // Syntax error reporting
+  const char* expectedString[] = {
+    "Nothing",
+    "program",
+    "undeclared identifier",
+    "type, newtype, or import"
+  };
+
+  const size_t expectedCount = sizeof(expectedString) / sizeof(expectedString[0]);
+
+  void Expected( unsigned line, unsigned column, unsigned expectedCode ) {
+    if( expectedCode && (expectedCode < expectedCount) ) {
+      printf( "Expected(L%u, C&u): %s\n", line, column, expectedString[expectedCode] );
+    } else if( expectedCode ) {
+      printf( "Expected: Unknown code %u\n", expectedCode );
+    }
+
+    exit( expectedCode );
+  }
+
+  // Program error reporting
   const char* errorString[] = {
     "No error",
+    "Set exit handler failed",
     "Unable to open",
     "Unable to create",
     "Unable to run",
@@ -1372,7 +1483,7 @@ int main( int argc, char* argv[] ) {
 
   const size_t errorCount = sizeof(errorString) / sizeof(errorString[0]);
 
-  void ExitError( unsigned errorCode, char* errorText ) {
+  void Error( unsigned errorCode, char* errorText ) {
     if( errorCode && (errorCode < errorCount) && errorText ) {
       printf( "ERROR(%u) %s: %s\n", errorCode, errorString[errorCode], errorText );
     } else if( errorCode ) {
@@ -1441,6 +1552,16 @@ int main( int argc, char* argv[] ) {
     }
 
     return newString;
+  }
+
+  void rstrclear( rstring* dest ) {
+    char* destText = NULL;
+    if( dest ) {
+      destText = rstrtext(dest);
+
+      dest->length = 0;
+      memset( destText + sizeof(rstring), 0, dest->rsvdLength );
+    }
   }
 
   rstring* rstrcopy( rstring* source ) {
@@ -1821,13 +1942,13 @@ int main( int argc, char* argv[] ) {
     }
 
     newSource->line = 1;
-    newSource->col = 1;
+    newSource->column = 1;
 
     ReadChar( newSource );
     ReadChar( newSource );
 
     newSource->line = 1;
-    newSource->col = 1;
+    newSource->column = 1;
 
     return newSource;
 
@@ -1857,7 +1978,7 @@ int main( int argc, char* argv[] ) {
   }
 
   bool ReadChar( RetFile* source ) {
-    unsigned colInc = 1;
+    unsigned columnInc = 1;
     char tmpCh = 0;
 
     if( !(source && source->handle) ) {
@@ -1866,8 +1987,8 @@ int main( int argc, char* argv[] ) {
 
     if( source->curCh == 10 ) {
       source->line++;
-      source->col = 1;
-      colInc = 0;
+      source->column = 1;
+      columnInc = 0;
     }
 
     source->curCh = source->nextCh;
@@ -1893,7 +2014,7 @@ int main( int argc, char* argv[] ) {
       source->nextCh = 10;
     }
 
-    source->col += colInc;
+    source->column += columnInc;
 
     return true;
   }
@@ -2269,7 +2390,7 @@ int main( int argc, char* argv[] ) {
     "~",    unaryNot,
     "~=",   assignNot
   };
-  const size_t numOpers = sizeof(operTable) / sizeof(operTable[0]);
+  const size_t operCount = sizeof(operTable) / sizeof(operTable[0]);
 
   unsigned ReadOperator( RetFile* source ) {
     char operator[8] = {};
@@ -2277,7 +2398,7 @@ int main( int argc, char* argv[] ) {
     size_t operIndex;
     size_t rightIndex;
     size_t operLength = 0;
-    int result;
+    int    compareCode;
     unsigned token = 0;
 
     if( !(source && ispunct(source->curCh)) ) {
@@ -2292,17 +2413,17 @@ int main( int argc, char* argv[] ) {
       operator[operLength++] = source->curCh;
 
       leftIndex = 0;
-      rightIndex = numOpers;
-      operIndex = numOpers / 2;
+      rightIndex = operCount;
+      operIndex = operCount / 2;
 
       while( leftIndex < rightIndex ) {
-        result = strcmp(operTable[operIndex].text, operator);
-        if( result == 0 ) {
+        compareCode = strcmp(operTable[operIndex].text, operator);
+        if( compareCode == 0 ) {
           token = operTable[operIndex].token;
           break;
         }
 
-        if( result > 0 ) {
+        if( compareCode > 0 ) {
           rightIndex = operIndex;
         } else {
           leftIndex = operIndex + 1;
@@ -2331,7 +2452,6 @@ int main( int argc, char* argv[] ) {
  *  Assembler generation declarations
  */
 
-;;;
   AsmGen* CreateAsm( char* fileName, size_t nameLength ) {
     AsmGen* newGen = NULL;
 
@@ -2353,18 +2473,6 @@ int main( int argc, char* argv[] ) {
     if( newGen->asmHandle == NULL ) {
       goto ReturnError;
     }
-
-    ///TODO: Move to parser at program header
-    fprintf( newGen->asmHandle,
-      "\n"
-      "  CPU 386\n"
-      "  BITS 32\n"
-      "\n"
-      "  %%include \"import.rxi\"\n"
-      "\n"
-      "section .text use32\n"
-      "\n"
-    );
 
     newGen->importHandle = fopen("import.rxi", "wb");
     if( newGen->importHandle == NULL ) {
@@ -2455,3 +2563,65 @@ int main( int argc, char* argv[] ) {
 /*
  *  Parser implementation
  */
+  bool SkipComments( RetFile* source );
+
+  bool ReadIdent( RetFile* source, rstring** ident, unsigned* hashCode );
+
+  unsigned FindKeyword( char* identifier );
+
+  void ParseProgramHeader() {
+    rstring* identStr = NULL;
+    unsigned hashCode = 0;
+    unsigned line;
+    unsigned column;
+
+    if( !(retSource && asmGen) ) {
+      return;
+    }
+
+    // Validate program header
+    SkipComments( retSource );
+
+    line = retSource->line;
+    column = retSource->column;
+
+    if( !ReadIdent(retSource, &identStr, &hashCode) ) {
+      // Ignore read error
+    }
+    if( FindKeyword(rstrtext(identStr)) != rsvdProgram ) {
+      Expected( line, column, expectedProgram );
+    }
+    rstrclear( identStr );
+
+    // Validate namespace identifier
+    SkipComments( retSource );
+
+    line = retSource->line;
+    column = retSource->column;
+
+    if( !ReadIdent(retSource, &identStr, &hashCode) ) {
+      // Ignore read error
+    }
+    if( FindKeyword(rstrtext(identStr)) != 0 ) {
+      Expected( line, column, expectedIdentifier );
+    }
+
+    ///TODO: Allocate symbol table
+
+    // Write start of assembler file
+    fprintf( asmGen->asmHandle,
+      "\n"
+      "  CPU 386\n"
+      "  BITS 32\n"
+      "\n"
+      "  %%include \"import.rxi\"\n"
+      "\n"
+      "section .text use32\n"
+      "\n"
+    );
+
+    if( identStr ) {
+      free( identStr );
+      identStr = NULL;
+    }
+  }

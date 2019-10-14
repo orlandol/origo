@@ -1,0 +1,13 @@
+
+    foo
+/*
+ *  DLL import program
+ */
+program ImportExit
+
+  import func ExitProcess( UINT uExitCode )
+    from 'kernel32.dll'
+
+run
+  ExitProcess(123)
+end
