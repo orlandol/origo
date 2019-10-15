@@ -1317,6 +1317,8 @@ int main( int argc, char* argv[] ) {
   /* Parse Retineo source */
   printf( "\nParsing '%s'...\n", rstrtext(retFileName) );
 
+  printf( "\n" );
+
   ParseProgramHeader( retSource, asmGen );
 
   // Begin: Temporary code to be replaced by parser
@@ -1395,7 +1397,6 @@ int main( int argc, char* argv[] ) {
     }
 
     while( leftIndex < rightIndex ) {
-printf( "%s ? %s\n", keywordTable[keywordIndex].name, identifier );
       compareCode = strcmp(keywordTable[keywordIndex].name, identifier);
       if( compareCode == 0 ) {
         return keywordTable[keywordIndex].token;
@@ -1444,7 +1445,7 @@ printf( "%s ? %s\n", keywordTable[keywordIndex].name, identifier );
 
   void Warning( unsigned line, unsigned column, unsigned warningCode ) {
     if( warningCode && (warningCode < warningCount) ) {
-      printf( "Expected(L%u, C&u): %s\n", line, column, warningString[warningCode] );
+      printf( "Expected(L%u, C%u): %s\n", line, column, warningString[warningCode] );
     } else if( warningCode ) {
       printf( "Expected: Unknown code %u\n", warningCode );
     }
@@ -1462,7 +1463,7 @@ printf( "%s ? %s\n", keywordTable[keywordIndex].name, identifier );
 
   void Expected( unsigned line, unsigned column, unsigned expectedCode ) {
     if( expectedCode && (expectedCode < expectedCount) ) {
-      printf( "Expected(L%u, C&u): %s\n", line, column, expectedString[expectedCode] );
+      printf( "Expected(L%u, C%u): %s\n", line, column, expectedString[expectedCode] );
     } else if( expectedCode ) {
       printf( "Expected: Unknown code %u\n", expectedCode );
     }
@@ -2585,6 +2586,7 @@ printf( "%s ? %s\n", keywordTable[keywordIndex].name, identifier );
     line = retSource->line;
     column = retSource->column;
 
+///BUG: Origo crashes after the first ReadIdent()
     if( !ReadIdent(retSource, &identStr, &hashCode) ) {
       // Ignore read error
     }
@@ -2592,6 +2594,7 @@ printf( "%s ? %s\n", keywordTable[keywordIndex].name, identifier );
       Expected( line, column, expectedProgram );
     }
     rstrclear( identStr );
+printf( ".\n" );
 
     // Validate namespace identifier
     SkipComments( retSource );

@@ -1,9 +1,10 @@
 
-    foo
 /*
  *  DLL import program
  */
 program ImportExit
+
+  type uint UINT
 
   import func ExitProcess( UINT uExitCode )
     from 'kernel32.dll'
