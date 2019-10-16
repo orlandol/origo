@@ -168,20 +168,20 @@ STATEMENT
   endcase
 
   [IDENT:]for VARNAME in <BASETYPE | SETNAME | '[' CONSTEXPR[, ...] ']' >
-    [<STATEMENT | next [LABELNAME] | stop [LABELNAME]>]
+    [<STATEMENT | next [LABELNAME] | break [LABELNAME]>]
   endfor
 
   [IDENT:]for VARNAME = EXPRESSION <to | downto> EXPRESSION
         [step CONSTEXPR]
-    [<STATEMENT | next [LABELNAME] | stop [LABELNAME]>]
+    [<STATEMENT | next [LABELNAME] | break [LABELNAME]>]
   endfor
 
   [IDENT:]while CONDITION
-    [<STATEMENT | next [LABELNAME] | stop [LABELNAME]>]
+    [<STATEMENT | next [LABELNAME] | break [LABELNAME]>]
   endwhile
 
   [IDENT:]repeat
-    [<STATEMENT | break [LABELNAME] | continue [LABELNAME]>]
+    [<STATEMENT | next [LABELNAME] | break [LABELNAME]>]
   when CONDITION
 
   IDENT ':'

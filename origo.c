@@ -1195,6 +1195,8 @@
  */
 
   void ParseProgramHeader();
+  void ParseTopLevel();
+  void EndParse();
 
 /*
  *  Main program
@@ -1319,7 +1321,8 @@ int main( int argc, char* argv[] ) {
 
   printf( "\n" );
 
-  ParseProgramHeader( retSource, asmGen );
+  ParseProgramHeader();
+  ParseTopLevel();
 
   // Begin: Temporary code to be replaced by parser
   fprintf( asmGen->asmHandle,
@@ -1342,6 +1345,8 @@ int main( int argc, char* argv[] ) {
     "  import ExitProcess kernel32.dll\n"
   );
   // End: Temporary code to be replaced by parser
+
+  EndParse();
 
   CloseRet( &retSource );
   CloseAsm( &asmGen );
@@ -1561,7 +1566,7 @@ int main( int argc, char* argv[] ) {
       destText = rstrtext(dest);
 
       dest->length = 0;
-      memset( destText + sizeof(rstring), 0, dest->rsvdLength );
+      memset( destText, 0, rstrrsvdlen(dest) );
     }
   }
 
@@ -2507,21 +2512,6 @@ int main( int argc, char* argv[] ) {
     if( asmGen ) {
       if( (*asmGen) ) {
         if( (*asmGen)->asmHandle ) {
-          ///TODO: Move to parser at program EOF
-          fprintf( (*asmGen)->asmHandle,
-            "\n"
-            "section .rdata use32\n"
-            "\n"
-            "  %%include \"const.rxi\"\n"
-            "\n"
-            "section .data use32\n"
-            "\n"
-            "  %%include \"data.rxi\"\n"
-            "\n"
-            "section .bss use32\n"
-            "\n"
-            "  %%include \"bss.rxi\"\n" );
-
           fclose( (*asmGen)->asmHandle );
           (*asmGen)->asmHandle = NULL;
         }
@@ -2564,11 +2554,6 @@ int main( int argc, char* argv[] ) {
 /*
  *  Parser implementation
  */
-  bool SkipComments( RetFile* source );
-
-  bool ReadIdent( RetFile* source, rstring** ident, unsigned* hashCode );
-
-  unsigned FindKeyword( char* identifier );
 
   void ParseProgramHeader() {
     rstring* identStr = NULL;
@@ -2586,7 +2571,6 @@ int main( int argc, char* argv[] ) {
     line = retSource->line;
     column = retSource->column;
 
-///BUG: Origo crashes after the first ReadIdent()
     if( !ReadIdent(retSource, &identStr, &hashCode) ) {
       // Ignore read error
     }
@@ -2594,7 +2578,6 @@ int main( int argc, char* argv[] ) {
       Expected( line, column, expectedProgram );
     }
     rstrclear( identStr );
-printf( ".\n" );
 
     // Validate namespace identifier
     SkipComments( retSource );
@@ -2614,6 +2597,11 @@ printf( ".\n" );
     // Write start of assembler file
     fprintf( asmGen->asmHandle,
       "\n"
+      "; program %s\n", rstrtext(identStr)
+    );
+
+    fprintf( asmGen->asmHandle,
+      "\n"
       "  CPU 386\n"
       "  BITS 32\n"
       "\n"
@@ -2627,4 +2615,24 @@ printf( ".\n" );
       free( identStr );
       identStr = NULL;
     }
+  }
+
+  void ParseTopLevel() {
+  }
+
+  void EndParse() {
+    fprintf( asmGen->asmHandle,
+      "\n"
+      "section .rdata use32\n"
+      "\n"
+      "  %%include \"const.rxi\"\n"
+      "\n"
+      "section .data use32\n"
+      "\n"
+      "  %%include \"data.rxi\"\n"
+      "\n"
+      "section .bss use32\n"
+      "\n"
+      "  %%include \"bss.rxi\"\n"
+    );
   }
