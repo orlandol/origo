@@ -1323,29 +1323,6 @@ int main( int argc, char* argv[] ) {
 
   ParseProgramHeader();
   ParseTopLevel();
-
-  // Begin: Temporary code to be replaced by parser
-  fprintf( asmGen->asmHandle,
-    "run:\n"
-    "..start:\n"
-    "\n"
-    "  push    ebp\n"
-    "  mov     ebp, esp\n"
-    "\n"
-    "  mov     esp, ebp\n"
-    "  pop     ebp\n"
-    "\n"
-    "  push   dword 123\n"
-    "  call   [ExitProcess]\n"
-  );
-
-  fprintf( asmGen->importHandle,
-    "\n"
-    "  extern ExitProcess\n"
-    "  import ExitProcess kernel32.dll\n"
-  );
-  // End: Temporary code to be replaced by parser
-
   EndParse();
 
   CloseRet( &retSource );
@@ -2618,6 +2595,27 @@ int main( int argc, char* argv[] ) {
   }
 
   void ParseTopLevel() {
+    // Begin: Temporary code to be replaced by parser
+    fprintf( asmGen->asmHandle,
+      "run:\n"
+      "..start:\n"
+      "\n"
+      "  push    ebp\n"
+      "  mov     ebp, esp\n"
+      "\n"
+      "  mov     esp, ebp\n"
+      "  pop     ebp\n"
+      "\n"
+      "  push   dword 123\n"
+      "  call   [ExitProcess]\n"
+    );
+  
+    fprintf( asmGen->importHandle,
+      "\n"
+      "  extern ExitProcess\n"
+      "  import ExitProcess kernel32.dll\n"
+    );
+    // End: Temporary code to be replaced by parser
   }
 
   void EndParse() {
