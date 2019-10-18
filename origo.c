@@ -44,12 +44,10 @@
       rsvdNewType,
       rsvdStruct,
       rsvdObject,
+      rsvdImport,
       rsvdPublic,
-      rsvdVisible,
-      rsvdInternal,
+      rsvdMutable,
       rsvdExtends,
-      rsvdPrivate,
-      rsvdInterface,
       rsvdImplements,
       rsvdMethod,
       rsvdSelf,
@@ -368,6 +366,7 @@
 
   const Keyword keywordTable[] = {
     "end",     rsvdEnd,
+    "import",  rsvdImport,
     "newtype", rsvdNewType,
     "program", rsvdProgram,
     "run",     rsvdRun,
@@ -1132,6 +1131,9 @@
  *  Symbol table declarations
  */
 
+  typedef struct _SymTab {
+  } SymTab;
+
 /*
  *  Symbol declarations
  */
@@ -1194,9 +1196,28 @@
  *  Parser declarations
  */
 
+  typedef struct _IfStack {
+    unsigned 
+  } IfStack;
+
+  typedef struct _LoopStack {
+  } LoopStack;
+
   void ParseProgramHeader();
-  void ParseTopLevel();
   void EndParse();
+
+  void ParseType();
+  void ParseNewType();
+  void ParseImport();
+
+  void ParseIf( SymTab* localSymTab, IfStack* ifStack );
+  void ParseFor( SymTab* localSymTab, LoopStack* loopStack );
+
+  void ParseStatement( SymTab* localSymTab );
+
+  void ParseRun();
+
+  void ParseTopLevel();
 
 /*
  *  Main program
@@ -2574,10 +2595,7 @@ int main( int argc, char* argv[] ) {
     // Write start of assembler file
     fprintf( asmGen->asmHandle,
       "\n"
-      "; program %s\n", rstrtext(identStr)
-    );
-
-    fprintf( asmGen->asmHandle,
+      "; program %s\n"
       "\n"
       "  CPU 386\n"
       "  BITS 32\n"
@@ -2585,7 +2603,8 @@ int main( int argc, char* argv[] ) {
       "  %%include \"import.rxi\"\n"
       "\n"
       "section .text use32\n"
-      "\n"
+      "\n",
+      rstrtext(identStr)
     );
 
     if( identStr ) {
@@ -2594,7 +2613,85 @@ int main( int argc, char* argv[] ) {
     }
   }
 
+  void EndParse() {
+    fprintf( asmGen->asmHandle,
+      "\n"
+      "section .rdata use32\n"
+      "\n"
+      "  %%include \"const.rxi\"\n"
+      "\n"
+      "section .data use32\n"
+      "\n"
+      "  %%include \"data.rxi\"\n"
+      "\n"
+      "section .bss use32\n"
+      "\n"
+      "  %%include \"bss.rxi\"\n"
+    );
+  }
+
+  void ParseType() {
+  }
+
+  void ParseNewType() {
+  }
+
+  void ParseImport() {
+  }
+
+  void ParseIf( SymTab* localSymTab, IfStack* ifStack ) {
+  }
+
+  void ParseFor( SymTab* localSymTab, LoopStack* loopStack ) {
+  }
+
+  void ParseStatement( SymTab* localSymTab ) {
+  }
+
+  void ParseRun() {
+  }
+
   void ParseTopLevel() {
+    rstring* identStr = NULL;
+    unsigned token = 0;
+    unsigned hashCode = 0;
+    unsigned line = 0;
+    unsigned column = 0;
+
+    do {
+      SkipComments( retSource );
+
+      line = retSource->line;
+      column = retSource->column;
+
+      if( ReadIdent(retSource, &identStr, &hashCode) == false ) {
+        ///TODO: Error.
+      }
+
+      token = FindKeyword(rstrtext(identStr));
+
+      switch( token ) {
+      case rsvdType:
+        ParseType();
+        break;
+
+      case rsvdNewType:
+        ParseNewType();
+        break;
+
+      case rsvdImport:
+        ParseImport();
+        break;
+
+      case rsvdRun:
+        ParseRun();
+        break;
+
+      default:
+        Expected( line, column, expectedTopLevel );
+      }
+    } while( token );
+
     // Begin: Temporary code to be replaced by parser
     fprintf( asmGen->asmHandle,
       "run:\n"
@@ -2616,21 +2713,4 @@ int main( int argc, char* argv[] ) {
       "  import ExitProcess kernel32.dll\n"
     );
     // End: Temporary code to be replaced by parser
-  }
-
-  void EndParse() {
-    fprintf( asmGen->asmHandle,
-      "\n"
-      "section .rdata use32\n"
-      "\n"
-      "  %%include \"const.rxi\"\n"
-      "\n"
-      "section .data use32\n"
-      "\n"
-      "  %%include \"data.rxi\"\n"
-      "\n"
-      "section .bss use32\n"
-      "\n"
-      "  %%include \"bss.rxi\"\n"
-    );
   }
