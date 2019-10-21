@@ -1197,7 +1197,10 @@
  */
 
   typedef struct _IfStack {
-    unsigned 
+    unsigned block;
+    unsigned currentIf;
+    unsigned nextIf;
+    unsigned endIf;
   } IfStack;
 
   typedef struct _LoopStack {
@@ -2640,6 +2643,30 @@ int main( int argc, char* argv[] ) {
   }
 
   void ParseIf( SymTab* localSymTab, IfStack* ifStack ) {
+    ///TODO: IfStack usage [draft]
+
+    //  if COND
+    //    currentIf = nextIf++
+    //  then STATEMENT
+    //  [".nextif", hex(block), hex(nextIf), ":"]
+    //  [".endif", hex(block), hex(endIf), ":"]
+
+    //  if COND
+    //    currentIf = nextIf++
+    //    ...
+    //    jmp endIf
+    //
+    //  [".nextif", hex(block), hex(currentIf), ":"]
+    //  elseif COND
+    //    currentIf = nextIf++
+    //    ...
+    //    jmp endIf
+    //
+    //  [".nextif", hex(block), hex(currentIf), ":"]
+    //  else
+    //    ...
+    //  [".endif", hex(block), hex(endIf), ":"]
+    //  endif
   }
 
   void ParseFor( SymTab* localSymTab, LoopStack* loopStack ) {
