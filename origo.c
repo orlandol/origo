@@ -1128,6 +1128,17 @@
   }
 
 /*
+ *  Type specifier declarations
+ */
+
+  typedef struct TypeSpec {
+    rstring* name;
+    unsigned pointerType; // <ptrRef '#' | ptrData '@'>
+    unsigned baseType; // <typeStruct, typeUint, etc>
+    ///TODO: Define array dimension lists
+  } TypeSpec;
+
+/*
  *  Symbol table declarations
  */
 
@@ -1169,6 +1180,8 @@
   bool ReadString( RetFile* source, rstring** string, unsigned* hashCode );
 
   unsigned ReadOperator( RetFile* source );
+
+  unsigned ReadTypeSpec( RetFile* source, TypeSpec* destSpec );
 
 /*
  *  Expression parser declarations
@@ -1915,6 +1928,10 @@ int main( int argc, char* argv[] ) {
   }
 
 /*
+ *  Type specifier implementation
+ */
+
+/*
  *  Symbol table implementation
  */
 
@@ -2449,6 +2466,10 @@ int main( int argc, char* argv[] ) {
     }
 
     return token;
+  }
+
+  unsigned ReadTypeSpec( RetFile* source, TypeSpec* destSpec ) {
+    return 0;
   }
 
 /*
