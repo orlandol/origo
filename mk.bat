@@ -1,2 +1,2 @@
 @echo off
-tcc %1.c avl.c
+tcc %1.c
