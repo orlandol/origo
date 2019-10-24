@@ -489,7 +489,7 @@
   } TypeSpec;
 
 /*
- *  Symbol declarations
+ *  Symbol table declarations
  */
 
   typedef struct BaseTypeSymbol {
@@ -498,14 +498,10 @@
 
   typedef struct TypeSymbol {
     TypeSpec typeSpec;
-    unsigned valType;
     uint8_t* defaultVal;
+    unsigned valType;
     size_t valSize;
   } TypeSymbol;
-
-/*
- *  Symbol table declarations
- */
 
   enum SymType {
     symNone = 0,
@@ -522,8 +518,20 @@
     };
   } SymbolItem;
 
-  typedef struct SymbolTable {
-  } SymbolTable;
+  DECLARE_STRING_KEYARRAY_TYPES( SymbolTable, SymbolItem )
+
+  void FreeSymItem( SymbolItem* symItem );
+
+  DECLARE_STRING_KEYARRAY_CREATE( CreateSymTab, SymbolTable )
+  DECLARE_STRING_KEYARRAY_FREE( ReleaseSymTab, SymbolTable, FreeSymItem )
+
+  DECLARE_STRING_KEYARRAY_INSERT( InsertSymbol, SymbolTable, SymbolItem )
+  DECLARE_STRING_KEYARRAY_REMOVE( RemoveSymbol, SymbolTable, FreeSymItem )
+
+  DECLARE_STRING_KEYARRAY_RETRIEVE( RetrieveSymbol, SymbolTable, SymbolItem )
+
+  bool DeclareBaseType( SymbolTable* symTab, char* name, unsigned baseToken );
+  bool DeclareType( SymbolTable* symTab, char* name, TypeSpec* typeSpec );
 
 /*
  *  Lexer declarations
@@ -1309,12 +1317,19 @@ int main( int argc, char* argv[] ) {
  */
 
 /*
- *  Symbol implementation
- */
-
-/*
  *  Symbol table implementation
  */
+
+  void FreeSymItem( SymbolItem* symItem ) {
+  }
+
+  bool DeclareBaseType( SymbolTable* symTab, char* name, unsigned baseToken ) {
+    return false;
+  }
+
+  bool DeclareType( SymbolTable* symTab, char* name, TypeSpec* typeSpec ) {
+    return false;
+  }
 
 /*
  *  Lexer implementation
