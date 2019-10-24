@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "avl.h"
 #include "keyarray.h"
 
 /*
@@ -1316,8 +1315,6 @@ int main( int argc, char* argv[] ) {
 /*
  *  Symbol table implementation
  */
-
-  #include "avl.c"
 
 /*
  *  Lexer implementation
