@@ -482,6 +482,7 @@
 
     // <typeStruct, typeUint, etc>
     unsigned baseType;
+    unsigned basePrecision;
 
     // '[' <[min..max[,...]] | [count[,...]]> ']'
     size_t dimensionCount;
@@ -492,9 +493,9 @@
  *  Symbol table declarations
  */
 
-  typedef struct BaseTypeSymbol {
-    unsigned bitCount;
-  } BaseTypeSymbol;
+  typedef struct TypeAliasSymbol {
+    rstring* typeName;
+  } TypeAliasSymbol;
 
   typedef struct TypeSymbol {
     TypeSpec typeSpec;
@@ -503,18 +504,23 @@
     size_t valSize;
   } TypeSymbol;
 
+  typedef struct ImportSymbol {
+  } ImportSymbol;
+
   enum SymType {
     symNone = 0,
     symBaseType,
-    symType
+    symType,
+    symFuncImport
   };
 
   typedef struct SymbolItem {
     unsigned token;
 
     union {
-      BaseTypeSymbol baseTypeSym;
+      TypeAliasSymbol typeAlias;
       TypeSymbol typeSym;
+      ImportSymbol importSym;
     };
   } SymbolItem;
 
@@ -530,7 +536,6 @@
 
   DECLARE_STRING_KEYARRAY_RETRIEVE( RetrieveSymbol, SymbolTable, SymbolItem )
 
-  bool DeclareBaseType( SymbolTable* symTab, char* name, unsigned baseToken );
   bool DeclareType( SymbolTable* symTab, char* name, TypeSpec* typeSpec );
 
 /*
@@ -641,6 +646,8 @@
   RetFile* retSource = NULL;
   AsmGen* asmGen = NULL;
 
+  SymbolTable* symTab = NULL;
+
   void Cleanup() {
     if( retFileName ) {
       free( retFileName );
@@ -664,6 +671,8 @@
 
     CloseRet( &retSource );
     CloseRet( &asmGen );
+
+    ReleaseSymTab( &symTab );
   }
 
 int main( int argc, char* argv[] ) {
@@ -1321,6 +1330,27 @@ int main( int argc, char* argv[] ) {
  */
 
   void FreeSymItem( SymbolItem* symItem ) {
+    if( symItem == NULL ) {
+      return;
+    }
+
+    switch( symItem->token ) {
+    case symNone:
+      return;
+
+    case symBaseType:
+      return;
+
+    case symType:
+      if( symItem->typeSym.typeSpec.dimension ) {
+        free( symItem->typeSym.typeSpec.dimension );
+        symItem->typeSym.typeSpec.dimension = NULL;
+      }
+      return;
+
+    case symFuncImport:
+      return;
+    }
   }
 
   bool DeclareBaseType( SymbolTable* symTab, char* name, unsigned baseToken ) {
@@ -2007,6 +2037,10 @@ int main( int argc, char* argv[] ) {
     }
 
     ///TODO: Allocate symbol table
+    symTab = CreateSymTab(0);
+    if( symTab == NULL ) {
+      Error( unableToCreate, "Symbol Table" );
+    }
 
     // Write start of assembler file
     fprintf( asmGen->asmHandle,
