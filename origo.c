@@ -476,6 +476,17 @@
     size_t offset;
   } ArrayDimension;
 
+  typedef union TypeVal {
+    unsigned uVal;
+    int iVal;
+    char chVal;
+    char* strVal;
+    struct {
+      uint8_t* complexVal;
+      size_t complexSize;
+    };
+  } TypeVal;
+
   typedef struct TypeSpec {
     // <ptrRef '#' | ptrData '@'>
     unsigned pointerType;
@@ -487,6 +498,9 @@
     // '[' <[min..max[,...]] | [count[,...]]> ']'
     size_t dimensionCount;
     ArrayDimension* dimension;
+
+    // = defaultValue
+    TypeVal initVal;
   } TypeSpec;
 
 /*
@@ -526,6 +540,7 @@
 
   DECLARE_STRING_KEYARRAY_TYPES( SymbolTable, SymbolItem )
 
+  void CopySymItem( SymbolItem* dest, SymbolItem* source );
   void FreeSymItem( SymbolItem* symItem );
 
   DECLARE_STRING_KEYARRAY_CREATE( CreateSymTab, SymbolTable )
@@ -1329,6 +1344,9 @@ int main( int argc, char* argv[] ) {
  *  Symbol table implementation
  */
 
+  void CopySymItem( SymbolItem* dest, SymbolItem* source ) {
+  }
+
   void FreeSymItem( SymbolItem* symItem ) {
     if( symItem == NULL ) {
       return;
@@ -1351,10 +1369,6 @@ int main( int argc, char* argv[] ) {
     case symFuncImport:
       return;
     }
-  }
-
-  bool DeclareBaseType( SymbolTable* symTab, char* name, unsigned baseToken ) {
-    return false;
   }
 
   bool DeclareType( SymbolTable* symTab, char* name, TypeSpec* typeSpec ) {
