@@ -476,16 +476,16 @@
     size_t offset;
   } ArrayDimension;
 
-  typedef union TypeVal {
+  typedef union TokenVal {
     unsigned uVal;
     int iVal;
     char chVal;
     char* strVal;
     struct {
-      uint8_t* complexVal;
-      size_t complexSize;
+      uint8_t* dataVal;
+      size_t dataSize;
     };
-  } TypeVal;
+  } TokenVal;
 
   typedef struct TypeSpec {
     // <ptrRef '#' | ptrData '@'>
@@ -493,14 +493,17 @@
 
     // <typeStruct, typeUint, etc>
     unsigned baseType;
-    unsigned basePrecision;
+    union {
+      size_t baseSize;
+      size_t baseBits;
+    };
 
     // '[' <[min..max[,...]] | [count[,...]]> ']'
     size_t dimensionCount;
     ArrayDimension* dimension;
 
     // = defaultValue
-    TypeVal initVal;
+    TokenVal initVal;
   } TypeSpec;
 
 /*
@@ -528,7 +531,7 @@
     symFuncImport
   };
 
-  typedef struct SymbolItem {
+  typedef struct SymItem {
     unsigned token;
 
     union {
@@ -536,22 +539,23 @@
       TypeSymbol typeSym;
       ImportSymbol importSym;
     };
-  } SymbolItem;
+  } SymItem;
 
-  DECLARE_STRING_KEYARRAY_TYPES( SymbolTable, SymbolItem )
+  DECLARE_STRING_KEYARRAY_TYPES( SymTable, SymItem )
 
-  void CopySymItem( SymbolItem* dest, SymbolItem* source );
-  void FreeSymItem( SymbolItem* symItem );
+  void CopySymItem( SymItem* dest, SymItem* source );
+  void FreeSymItem( SymItem* symItem );
 
-  DECLARE_STRING_KEYARRAY_CREATE( CreateSymTab, SymbolTable )
-  DECLARE_STRING_KEYARRAY_FREE( ReleaseSymTab, SymbolTable, FreeSymItem )
+  DECLARE_STRING_KEYARRAY_CREATE( CreateSymTab, SymTable )
+  DECLARE_STRING_KEYARRAY_FREE( ReleaseSymTab, SymTable, FreeSymItem )
 
-  DECLARE_STRING_KEYARRAY_INSERT( InsertSymbol, SymbolTable, SymbolItem )
-  DECLARE_STRING_KEYARRAY_REMOVE( RemoveSymbol, SymbolTable, FreeSymItem )
+  DECLARE_STRING_KEYARRAY_INSERT( InsertSymbol, SymTable, SymItem )
+  DECLARE_STRING_KEYARRAY_REMOVE( RemoveSymbol, SymTable, FreeSymItem )
 
-  DECLARE_STRING_KEYARRAY_RETRIEVE( RetrieveSymbol, SymbolTable, SymbolItem )
+  DECLARE_STRING_KEYARRAY_RETRIEVE( RetrieveSymbol, SymTable, SymItem )
 
-  bool DeclareType( SymbolTable* symTab, char* name, TypeSpec* typeSpec );
+  bool DeclareType( SymTable* symTab, char* definedType, char* typeName, TokenVal* initVal );
+  bool DeclareNewType( SymTable* symTab, char* name, TypeSpec* typeSpec );
 
 /*
  *  Lexer declarations
@@ -631,10 +635,10 @@
   void ParseNewType();
   void ParseImport();
 
-  void ParseIf( SymbolTable* localSymTab, IfStack* ifStack );
-  void ParseFor( SymbolTable* localSymTab, LoopStack* loopStack );
+  void ParseIf( SymTable* localSymTab, IfStack* ifStack );
+  void ParseFor( SymTable* localSymTab, LoopStack* loopStack );
 
-  void ParseStatement( SymbolTable* localSymTab );
+  void ParseStatement( SymTable* localSymTab );
 
   void ParseRun();
 
@@ -661,7 +665,7 @@
   RetFile* retSource = NULL;
   AsmGen* asmGen = NULL;
 
-  SymbolTable* symTab = NULL;
+  SymTable* symTab = NULL;
 
   void Cleanup() {
     if( retFileName ) {
@@ -1344,10 +1348,10 @@ int main( int argc, char* argv[] ) {
  *  Symbol table implementation
  */
 
-  void CopySymItem( SymbolItem* dest, SymbolItem* source ) {
+  void CopySymItem( SymItem* dest, SymItem* source ) {
   }
 
-  void FreeSymItem( SymbolItem* symItem ) {
+  void FreeSymItem( SymItem* symItem ) {
     if( symItem == NULL ) {
       return;
     }
@@ -1371,7 +1375,22 @@ int main( int argc, char* argv[] ) {
     }
   }
 
-  bool DeclareType( SymbolTable* symTab, char* name, TypeSpec* typeSpec ) {
+  bool DeclareType( SymTable* symTab, char* definedType, char* typeName, TokenVal* initVal ) {
+    SymItem typeItem = {};
+
+    return false;
+  }
+
+  bool DeclareNewType( SymTable* symTab, char* name, TypeSpec* typeSpec ) {
+    SymItem typeItem = {};
+
+    if( !(symTab && name && (*name) && typeSpec) ) {
+      return false;
+    }
+
+    return false;
+
+  ReturnError:
     return false;
   }
 
@@ -2103,7 +2122,7 @@ int main( int argc, char* argv[] ) {
   void ParseImport() {
   }
 
-  void ParseIf( SymbolTable* localSymTab, IfStack* ifStack ) {
+  void ParseIf( SymTable* localSymTab, IfStack* ifStack ) {
     ///TODO: IfStack usage [draft]
 
     //  if COND
@@ -2130,10 +2149,10 @@ int main( int argc, char* argv[] ) {
     //  endif
   }
 
-  void ParseFor( SymbolTable* localSymTab, LoopStack* loopStack ) {
+  void ParseFor( SymTable* localSymTab, LoopStack* loopStack ) {
   }
 
-  void ParseStatement( SymbolTable* localSymTab ) {
+  void ParseStatement( SymTable* localSymTab ) {
   }
 
   void ParseRun() {
