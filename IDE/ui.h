@@ -7,8 +7,8 @@
   typedef void* App;
 
   App CreateApp( char* title, unsigned width, unsigned height );
-  void FreeApp( App* app );
+  void FreeApp( App* appPtr );
 
-  void ExitApp( App app );
+  void ExitApp( App app, unsigned exitCode );
 
 #endif
