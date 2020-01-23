@@ -4,11 +4,12 @@
 /*
  *  App declarations
  */
-  typedef void* App;
+  typedef void* PAppImpl;
+  typedef PAppImpl App;
 
   App CreateApp( char* title, unsigned width, unsigned height );
   void FreeApp( App* appPtr );
 
-  void ExitApp( unsigned exitCode );
+  void ExitApp( App app, unsigned exitCode );
 
 #endif
