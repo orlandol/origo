@@ -11,6 +11,11 @@
 int main( int argc, char* argv[] ) {
   App editApp = CreateApp("Origo", 0, 0);
 
+  while( AppIsOpen(editApp) ) {
+    HandleMessages( editApp );
+    DrawApp( editApp );
+  }
+
   FreeApp( &editApp );
 
   return 0;

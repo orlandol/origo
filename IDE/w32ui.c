@@ -82,12 +82,17 @@
     HANDLE outBuffer;
     unsigned width;
     unsigned height;
+    ControlBar controlBar;
+    DrawControlBar drawControlBar;
+    View workView;
+    DrawView drawView;
   } Win32App;
 
 /*
  *  App implementation
  */
 
+#include <stdio.h>
   App CreateApp( char* title, unsigned width, unsigned height ) {
     Win32App* newApp = NULL;
     unsigned appError = 0;
@@ -181,6 +186,42 @@
         (*appPtr) = NULL;
       }
     }
+  }
+
+  bool AppIsOpen( App app ) {
+    return false;
+  }
+
+/*
+  typedef struct Win32App {
+    CONSOLE_SCREEN_BUFFER_INFO bufferOutInfo;
+    HANDLE outBuffer;
+    unsigned width;
+    unsigned height;
+    ControlBar controlBar;
+    DrawControlBar drawControlBar;
+    View workView;
+    DrawView drawView;
+  } Win32App;
+*/
+
+  void DrawApp( App app ) {
+    Win32App* w32App = (Win32App*)app;
+
+    if( w32App == NULL ) {
+      return;
+    }
+
+    if( &(w32App->controlBar) && &(w32App->drawControlBar) ) {
+      w32App->drawControlBar( &(w32App->controlBar) );
+    }
+
+    if( &(w32App->workView) && &(w32App->drawView) ) {
+      w32App->drawView( &(w32App->workView) );
+    }
+  }
+
+  void HandleMessages( App app ) {
   }
 
   void ExitApp( App app, unsigned exitCode ) {
