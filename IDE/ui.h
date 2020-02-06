@@ -30,7 +30,7 @@
     int y2;
   } Control;
 
-  typedef void (*DrawControl)( Control* control );
+  typedef void (*DrawControlFunc)( Control* control );
 
 /*
  *  MenuBar declarations
@@ -43,13 +43,9 @@
     int y1;
     int x2;
     int y2;
-    uint8_t fillColor;
-    uint8_t focusColor;
-    uint8_t textColor;
-    uint8_t hotkeyColor;
   } ControlBar;
 
-  typedef void (*DrawControlBar)( ControlBar* controlBar );
+  typedef void (*DrawControlBarFunc)( ControlBar* controlBar );
 
 /*
  *  View declarations
@@ -62,6 +58,7 @@
     int y2;
   } View;
 
-  typedef void (*DrawView)( View* view );
+  typedef void (*DrawViewFunc)( View* view );
+  typedef bool (*HandleMessageFunc)( View* view );
 
 #endif

@@ -83,16 +83,16 @@
     unsigned width;
     unsigned height;
     ControlBar controlBar;
-    DrawControlBar drawControlBar;
+    DrawControlBarFunc drawControlBar;
     View workView;
-    DrawView drawView;
+    DrawViewFunc drawView;
+    HandleMessageFunc handleMessage;
   } Win32App;
 
 /*
  *  App implementation
  */
 
-#include <stdio.h>
   App CreateApp( char* title, unsigned width, unsigned height ) {
     Win32App* newApp = NULL;
     unsigned appError = 0;
@@ -199,9 +199,10 @@
     unsigned width;
     unsigned height;
     ControlBar controlBar;
-    DrawControlBar drawControlBar;
+    DrawControlBarFunc drawControlBar;
     View workView;
-    DrawView drawView;
+    DrawViewFunc drawView;
+    HandleMessageFunc handleMessage;
   } Win32App;
 */
 
@@ -212,16 +213,33 @@
       return;
     }
 
-    if( &(w32App->controlBar) && &(w32App->drawControlBar) ) {
-      w32App->drawControlBar( &(w32App->controlBar) );
-    }
-
     if( &(w32App->workView) && &(w32App->drawView) ) {
       w32App->drawView( &(w32App->workView) );
+    }
+
+    if( &(w32App->controlBar) && &(w32App->drawControlBar) ) {
+      w32App->drawControlBar( &(w32App->controlBar) );
     }
   }
 
   void HandleMessages( App app ) {
+    Win32App* w32App = (Win32App*)app;
+
+    if( w32App == NULL ) {
+      return;
+    }
+
+    if( &(w32App->workView) && &(w32App->handleMessage) ) {
+      if( w32App->handleMessage(&(w32App->workView)) ) {
+        return;
+      }
+    }
+
+    if( &(w32App->controlBar) && &(w32App->handleMessage) ) {
+      if( w32App->handleMessage(&(w32App->controlBar)) ) {
+        return;
+      }
+    }
   }
 
   void ExitApp( App app, unsigned exitCode ) {
