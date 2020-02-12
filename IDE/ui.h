@@ -7,17 +7,23 @@
 /*
  *  App declarations
  */
-  typedef void* PAppImpl;
-  typedef PAppImpl App;
 
-  App CreateApp( char* title, unsigned width, unsigned height );
-  void FreeApp( App* appPtr );
+  // App color variables
+  extern unsigned colorAppBackground;
 
-  bool AppIsOpen( App app );
-  void DrawApp( App app );
-  void HandleMessages( App app );
+  // App state
+  bool InitializeApp( char* title );
+  void FreeResources();
 
-  void ExitApp( App app, unsigned exitCode );
+  bool AppIsRunning();
+
+  void ExitApp( unsigned exitCode );
+
+  // App UI
+  void DrawApp();
+
+  // App events
+  void HandleMessages();
 
 /*
  *  Control declarations
