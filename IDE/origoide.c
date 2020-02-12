@@ -9,7 +9,15 @@
 #include <stdio.h>
 
 int main( int argc, char* argv[] ) {
+
   InitializeApp( "Origo" );
+
+  while( AppIsRunning() ) {
+    DrawApp();
+    HandleMessages();
+  }
+
+  FreeResources();
 
   return 0;
 }
