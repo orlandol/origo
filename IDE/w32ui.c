@@ -78,6 +78,10 @@
  *  App implementation
  */
 
+  // App color variables
+  unsigned colorAppBackground = 0;
+
+  // App state
   bool InitializeApp( char* title ) {
     return false;
   }
@@ -97,10 +101,22 @@
     exit( exitCode );
   }
 
-  unsigned colorAppBackground = 0;
-
+  // App UI
   void DrawApp() {
   }
 
+  // App events
   void HandleMessages() {
   }
+
+/*
+ *  Control implementation
+ */
+
+/*
+ *  MenuBar implementation
+ */
+
+/*
+ *  View implementation
+ */
