@@ -64,6 +64,7 @@
     object IDENT
       [inherits OBJNAME[, ...]]
     [<public | mutable>]
+      [inherit QUALIFIEDMEMBER as IDENT]
       [TYPESPEC IDENT['=' CONSTEXPR][, ...]]
     end
 
@@ -85,11 +86,13 @@
 
     abstract <OBJNAME | IDENT [implements OBJNAME[, ...]]>
         [inherits <ABSNAME | IFACENAME>[, ...]]
+      [inherit QUALIFIEDMETHOD as IDENT]
       [method [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')']
     end
 
     interface <OBJNAME | IDENT [implements OBJNAME[, ...]]>
         [inherits <ABSNAME | IFACENAME>[, ...]]
+      [inherit QUALIFIEDMETHOD as IDENT]
       [method [CALLSPEC] [TYPESPEC] IDENT '(' [PARAMDECL[, ...]] ')']
     end
 
