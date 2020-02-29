@@ -59,6 +59,8 @@
       if( GetConsoleMode(stdErrHandle, &stdErrMode) == FALSE ) {
         return false;
       }
+
+      ///TODO: Save stderr buffer?
     }
 
     return true;
@@ -81,12 +83,49 @@
   // App color variables
   unsigned colorAppBackground = 0;
 
+  CHAR_INFO* outBuffer = NULL;
+
   // App state
   bool InitializeApp( char* title ) {
+    CONSOLE_SCREEN_BUFFER_INFO stdOutInfo = {};
+    size_t width;
+    size_t height;
+
+    // Validate parameters
+    if( !(title && (*title)) ) {
+      return false;
+    }
+
+    if( outBuffer ) {
+      return false;
+    }
+
+    // Allocate app buffer
+    if( GetConsoleScreenBufferInfo(stdOutHandle,
+        &stdOutInfo) == false ) {
+      goto ReturnError;
+    }
+
+    width = (stdOutInfo.srWindow.Left - stdOutInfo.srWindow.Right) + 1;
+    height = (stdOutInfo.srWindow.Bottom - stdOutInfo.srWindow.Top) + 1;
+
+    outBuffer = malloc(sizeof(CHAR_INFO) * width * height);
+    if( outBuffer == NULL ) {
+      goto ReturnError;
+    }
+
+    //srWindow
+    return false;
+
+  ReturnError:
     return false;
   }
 
   void FreeResources() {
+    if( outBuffer ) {
+      free( outBuffer );
+      outBuffer = NULL;
+    }
   }
 
   bool AppIsRunning() {
