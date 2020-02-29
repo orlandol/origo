@@ -1,34 +1,81 @@
-/*
-program helloWorld
+program HelloWorld
 
+  /*
+   * Win32 types
+   */
   type bool:1 BOOL
   type @ LPCVOID
+  type @ PVOID
   type uint:32 DWORD
   type @DWORD LPDWORD
+  type PVOID HANDLE
 
-  struct OVERLAPPED_Offset
-    DWORD Offset;
-    DWORD OffsetHigh;
+  /*
+   * Call specifications
+   */
+  callspec default, WINAPI
   end
 
+  /*
+   * GetStdHandle
+   */
+  const HANDLE STD_INPUT_HANDLE = @(-10)
+  const HANDLE STD_OUTPUT_HANDLE = @(-11)
+  const HANDLE STD_ERROR_HANDLE = @(-12)
+
+  import func HANDLE WINAPI GetStdHandle( DWORD nStdHandle )
+    from 'kernel32.dll'
+
+  /*
+   * WriteFile
+   */
   struct OVERLAPPED
-    ULONG_PTR Internal;
-    ULONG_PTR InternalHigh;
-    union (OVERLAPPED_Offset, PVOID) Pointer
-    PVOID Pointer;
-  } DUMMYUNIONNAME;
-  HANDLE    hEvent;
+    ULONG_PTR Internal
+    ULONG_PTR InternalHigh
+    union
+      struct
+        DWORD Offset
+        DWORD OffsetHigh
+      end
+      PVOID Pointer
+    end
+    HANDLE hEvent
   end
 
   type @OVERLAPPED LPOVERLAPPED
 
   import func BOOL WriteFile(
-  HANDLE       hFile,
-  LPCVOID      lpBuffer,
-  DWORD        nNumberOfBytesToWrite,
-  LPDWORD      lpNumberOfBytesWritten,
-  LPOVERLAPPED lpOverlapped
-);
+    HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite,
+    LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped
+  ) from 'kernel32.dll'
 
+  /*
+   * RTL
+   */
+  const string eoln = [10, 13]
+
+  var
+    HANDLE stdOut = null
+  end
+
+  func rtlecho( string value )
+    DWORD bytesWritten = 0
+
+    =WriteFile( stdOut, @value, value.length, @bytesWritten, null )
+  end
+
+  func echoln( ... values )
+    foreach value in values
+      rtlecho( value )
+    endfor
+    rtlecho( eoln )
+  end
+
+/*
+ * Run
+ */
 run
+  stdOut = GetStdHandle(STD_OUTPUT_HANDLE)
+
+  echoln( "Hello, world!" )
 end

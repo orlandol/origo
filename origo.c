@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "avl.h"
+#include "keyarray.h"
 
 /*
  *  Global variables
@@ -44,12 +44,10 @@
       rsvdNewType,
       rsvdStruct,
       rsvdObject,
+      rsvdImport,
       rsvdPublic,
-      rsvdVisible,
-      rsvdInternal,
+      rsvdMutable,
       rsvdExtends,
-      rsvdPrivate,
-      rsvdInterface,
       rsvdImplements,
       rsvdMethod,
       rsvdSelf,
@@ -74,8 +72,17 @@
       rsvdIn,
       rsvdExit,
 
+    // Base type tokens
+    baseType = (2 << 9),
+      baseInt,
+        firstBaseType = baseInt,
+      baseUint,
+      baseChar,
+      baseBool,
+        lastBaseType = baseBool,
+
     // Literal value tokens
-    valImmediate = (2 << 9),
+    valImmediate = (3 << 9),
       valInt = (valImmediate + (0 << 5)),
           firstValInt = valInt,
         valInt8,
@@ -94,8 +101,12 @@
           firstValChar = valChar,
           lastValChar = valChar,
 
+      valBool = (valImmediate + (3 << 5)),
+          firstValBool = valBool,
+          lastValBool = valBool,
+
     // Operator tokens
-    operSymbol = (3 << 9),
+    operSymbol = (4 << 9),
       operPrec00 = (operSymbol + (0 << 5)),
       operPrec01 = (operSymbol + (1 << 5)),
         opPostInc,
@@ -144,7 +155,7 @@
       operPrec15 = (operSymbol + (15 << 5)),
 
     // Assignment operators
-    assignSymbol  = (4 << 9),
+    assignSymbol  = (5 << 9),
       assignTo,
       assignNot,
       assignAdd,
@@ -164,7 +175,7 @@
       assignOr,
 
     // x86 operand tokens
-    x86Operand = (5 << 9),
+    x86Operand = (6 << 9),
         x86OperandMask = (x86Operand | (15 << 4)),
         x86SubOperandMask = (~3),
 
@@ -227,7 +238,7 @@
           lastX86Reg32 = x86RegEDI,
 
     // x86 mnemonic tokens
-    x86Mnemonic = (6 << 9),
+    x86Mnemonic = (7 << 9),
       x86Call,
         firstX86Mnemonic = x86Call,
       x86Push,
@@ -349,7 +360,7 @@
         lastX86Mnemonic = x86Xlatb,
 
     // x86 general keywords
-    x86Keyword = (7 << 9),
+    x86Keyword = (8 << 9),
         firstx86Keyword = x86Keyword,
       x86Short,
       x86Near,
@@ -368,6 +379,7 @@
 
   const Keyword keywordTable[] = {
     "end",     rsvdEnd,
+    "import",  rsvdImport,
     "newtype", rsvdNewType,
     "program", rsvdProgram,
     "run",     rsvdRun,
@@ -454,687 +466,96 @@
   rstring* rsubstrc( char* source, size_t sourceLength, size_t startPos, size_t endPos );
 
 /*
- *  String Key Array definition/implementation
+ *  Type specifier declarations
  */
 
-  #define DECLARE_STRING_KEYARRAY_TYPES(\
-      typeName, dataType )\
-  typedef struct typeName##Item {\
-    char* key;\
-    dataType data;\
-  } typeName##Item;\
-  \
-  typedef struct typeName {\
-    size_t reservedCount;\
-    size_t itemCount;\
-    typeName##Item* item;\
-  } typeName;
+  typedef struct ArrayDimension {
+    int minRange;
+    int maxRange;
+    size_t count;
+    size_t offset;
+  } ArrayDimension;
 
-  #define DECLARE_STRING_KEYARRAY_CREATE( funcName, listType )\
-  listType* funcName( size_t reserveCount ) {\
-      listType* newKeyArray = NULL;\
-    \
-    newKeyArray = (listType*)calloc(1, sizeof(listType));\
-    if( newKeyArray == NULL ) {\
-      goto ReturnError;\
-    }\
-    \
-    if( reserveCount ) {\
-      newKeyArray->item =\
-        (listType##Item*)calloc(reserveCount, sizeof(listType##Item));\
-      if( newKeyArray->item == NULL ) {\
-        goto ReturnError;\
-      }\
-      \
-      newKeyArray->reservedCount = reserveCount;\
-    }\
-    return newKeyArray;\
-  \
-  ReturnError:\
-    if( newKeyArray ) {\
-      if( newKeyArray->item ) {\
-        free( newKeyArray->item );\
-        newKeyArray->item = NULL;\
-      }\
-      free( newKeyArray );\
-      newKeyArray = NULL;\
-    }\
-    return NULL;\
-  }
+  typedef union TokenVal {
+    unsigned uVal;
+    int iVal;
+    char chVal;
+    char* strVal;
+    struct {
+      uint8_t* dataVal;
+      size_t dataSize;
+    };
+  } TokenVal;
 
-  #define DECLARE_STRING_KEYARRAY_FREE( funcName, listType, freeDataFunc )\
-  void funcName( listType** keyList ) {\
-    size_t index;\
-    size_t itemCount;\
-    \
-    if( keyList && (*keyList) ) {\
-      itemCount = (*keyList)->itemCount;\
-      for( index = 0; index < itemCount; index++ ) {\
-        if( (*keyList)->item[index].key ) {\
-          free( (*keyList)->item[index].key );\
-        }\
-        freeDataFunc( &((*keyList)->item[index].data) );\
-      }\
-      \
-      free( (*keyList) );\
-      (*keyList) = NULL;\
-    }\
-  }
+  typedef struct TypeSpec {
+    // <ptrRef '#' | ptrData '@'>
+    unsigned pointerType;
 
-  #define DECLARE_STRING_KEYARRAY_INSERT( funcName, listType, dataType )\
-  int funcName( listType* keyList, char* key, dataType* data ) {\
-    unsigned leftIndex;\
-    unsigned insertIndex;\
-    unsigned rightIndex;\
-    int result;\
-    char* newStrKey;\
-    size_t keyLen;\
-    unsigned prevCount;\
-    unsigned reservedCount;\
-    unsigned itemCount;\
-    listType##Item* item;\
-    \
-    if( !(keyList && key && data) ) {\
-      return 0;\
-    }\
-    \
-    keyLen = strlen(key);\
-    if( keyLen == 0 ) {\
-      return 0;\
-    }\
-    \
-    /* Grow list, if necessary */\
-    reservedCount = keyList->reservedCount;\
-    itemCount = keyList->itemCount;\
-    item = keyList->item;\
-    \
-    if( itemCount == reservedCount ) {\
-      prevCount = reservedCount;\
-      reservedCount += 8;\
-      if( prevCount > reservedCount ) {\
-        return 0;\
-      }\
-      \
-      item = realloc(item, reservedCount * sizeof(listType##Item));\
-      if( item == NULL ) {\
-        return 0;\
-      }\
-      keyList->reservedCount = reservedCount;\
-      keyList->item = item;\
-    }\
-    \
-    /* Search for insert position */\
-    leftIndex = 0;\
-    rightIndex = itemCount;\
-    insertIndex = itemCount / 2;\
-    \
-    while( leftIndex < rightIndex ) {\
-      result = strcmp(item[insertIndex].key, key);\
-      \
-      if( result == 0 ) {\
-        return 0;\
-      }\
-      \
-      if( result > 0 ) {\
-        rightIndex = insertIndex;\
-      } else {\
-        leftIndex = insertIndex + 1;\
-      }\
-      \
-      insertIndex = (leftIndex + rightIndex) / 2;\
-    }\
-    \
-    /* Attempt to allocate key string before going further */\
-    newStrKey = malloc(keyLen + 1);\
-    if( newStrKey == NULL ) {\
-      return 0;\
-    }\
-    strcpy( newStrKey, key );\
-    \
-    /* Move data past insertion point up, if necessary */\
-    memmove( &(item[insertIndex + 1]), &(item[insertIndex]),\
-        (itemCount - insertIndex) * sizeof(listType##Item) );\
-    \
-    /* Insert item */\
-    item[insertIndex].key = newStrKey;\
-    if( data ) {\
-      memcpy( &(item[insertIndex].data), data, sizeof(dataType) );\
-    }\
-    \
-    keyList->itemCount++;\
-    \
-    return 1;\
-  }
+    // <typeStruct, typeUint, etc>
+    unsigned baseType;
+    union {
+      size_t baseSize;
+      size_t baseBits;
+    };
 
-  #define DECLARE_STRING_KEYARRAY_REMOVE( funcName, listType, freeDataFunc )\
-  void funcName( listType* keyList, char* key ) {\
-    unsigned leftIndex;\
-    unsigned rightIndex;\
-    unsigned removeIndex;\
-    int result;\
-    unsigned reservedCount;\
-    unsigned itemCount;\
-    listType##Item* item;\
-    \
-    if( !(keyList && keyList->item && key && (*key)) ) {\
-      return;\
-    }\
-    \
-    reservedCount = keyList->reservedCount;\
-    itemCount = keyList->itemCount;\
-    item = keyList->item;\
-    \
-    /* Search for insert position */\
-    leftIndex = 0;\
-    rightIndex = itemCount;\
-    removeIndex = itemCount / 2;\
-    \
-    while( leftIndex < rightIndex ) {\
-      result = strcmp(item[removeIndex].key, key);\
-      \
-      if( result == 0 ) {\
-        freeDataFunc( &(item[removeIndex].data) );\
-        if( item[removeIndex].key ) {\
-          free( item[removeIndex].key );\
-          item[removeIndex].key = NULL;\
-        }\
-        \
-        if( itemCount ) {\
-          itemCount--;\
-          \
-          memcpy( &(item[removeIndex]), &(item[removeIndex + 1]),\
-            (itemCount - removeIndex) * sizeof(listType##Item) );\
-          \
-          keyList->itemCount = itemCount;\
-        }\
-        \
-        memset( &(item[itemCount]), 0, sizeof(listType##Item) );\
-        \
-        return;\
-      }\
-      \
-      if( result > 0 ) {\
-        rightIndex = removeIndex;\
-      } else {\
-        leftIndex = removeIndex + 1;\
-      }\
-      \
-      removeIndex = (leftIndex + rightIndex) / 2;\
-    }\
-  }
+    // '[' <[min..max[,...]] | [count[,...]]> ']'
+    size_t dimensionCount;
+    ArrayDimension* dimension;
 
-  #define DECLARE_STRING_KEYARRAY_RETRIEVE( funcName, listType, dataType )\
-  int funcName( listType* keyList, char* key, dataType* destData ) {\
-    unsigned leftIndex;\
-    unsigned rightIndex;\
-    unsigned retrieveIndex;\
-    int result;\
-    unsigned reservedCount;\
-    unsigned itemCount;\
-    listType##Item* item;\
-    \
-    if( !(keyList && keyList->item && key && (*key) && destData) ) {\
-      return 0;\
-    }\
-    \
-    reservedCount = keyList->reservedCount;\
-    itemCount = keyList->itemCount;\
-    item = keyList->item;\
-    \
-    /* Search for item */\
-    leftIndex = 0;\
-    rightIndex = itemCount;\
-    retrieveIndex = itemCount / 2;\
-    \
-    while( leftIndex < rightIndex ) {\
-      result = strcmp(item[retrieveIndex].key, key);\
-      \
-      if( result == 0 ) {\
-        memcpy( destData, &(item[retrieveIndex].data), sizeof(dataType) );\
-        return 1;\
-      }\
-      \
-      if( result > 0 ) {\
-        rightIndex = retrieveIndex;\
-      } else {\
-        leftIndex = retrieveIndex + 1;\
-      }\
-      \
-      retrieveIndex = (leftIndex + rightIndex) / 2;\
-    }\
-    \
-    return 0;\
-  }
-
-  #define DECLARE_STRING_KEYARRAY_RELEASEUNUSED( funcName, listType )\
-  void funcName( listType* keyList ) {\
-    listType##Item* item;\
-    \
-    if( keyList == NULL ) {\
-      return;\
-    }\
-    \
-    if( keyList->item && keyList->itemCount ) {\
-      /* Resize to remove reserved space*/\
-      item = realloc(keyList->item,\
-        keyList->itemCount * sizeof(listType##Item));\
-      if( item ) {\
-        keyList->item = item;\
-        keyList->reservedCount = keyList->itemCount;\
-      }\
-    } else {\
-      /* Deallocate */\
-      keyList->reservedCount = 0;\
-      keyList->itemCount = 0;\
-      if( keyList->item ) {\
-        free( keyList->item );\
-        keyList->item = NULL;\
-      }\
-    }\
-  }
-
-  #define DECLARE_STRING_KEYARRAY_COPY( funcName, listType, dataType,\
-      copyDataFunc, freeDataFunc )\
-  listType* funcName( listType* sourceList ) {\
-    listType* newCopy = NULL;\
-    listType##Item* sourceItem = NULL;\
-    size_t reservedCount = 0;\
-    size_t itemCount = 0;\
-    char* keyCopy;\
-    size_t keyLen;\
-    size_t index;\
-    \
-    if( sourceList == NULL ) {\
-      return NULL;\
-    }\
-    \
-    /* Attempt to allocate list object */\
-    newCopy = calloc(1, sizeof(listType));\
-    if( newCopy == NULL ) {\
-      goto ReturnError;\
-    }\
-    \
-    /* Initialize important variables */\
-    reservedCount = sourceList->reservedCount;\
-    itemCount = sourceList->itemCount;\
-    sourceItem = sourceList->item;\
-    \
-    /* A list with no items is valid */\
-    if( !(reservedCount && itemCount && sourceItem) ) {\
-      return newCopy;\
-    }\
-    \
-    /* Copy data, then copy the string keys */\
-    newCopy->item = malloc(reservedCount * sizeof(listType##Item));\
-    if( newCopy->item == NULL ) {\
-      goto ReturnError;\
-    }\
-    \
-    for( index = 0; index < itemCount; index++ ) {\
-      copyDataFunc( &(newCopy->item[index].data),\
-          &(sourceItem[index].data) );\
-      \
-      keyLen = strlen(sourceItem[index].key);\
-      keyCopy = malloc(keyLen + 1);\
-      if( keyCopy == NULL ) {\
-        goto ReturnError;\
-      }\
-      strcpy( keyCopy, sourceItem[index].key );\
-      \
-      newCopy->item[index].key = keyCopy;\
-    }\
-    \
-    newCopy->reservedCount = reservedCount;\
-    newCopy->itemCount = itemCount;\
-    \
-    return newCopy;\
-    \
-  ReturnError:\
-    if( newCopy == NULL ) {\
-      return NULL;\
-    }\
-    \
-    if( newCopy->item ) {\
-      for( index = 0; index < itemCount; index++ ) {\
-        freeDataFunc( &(newCopy->item[index].data) );\
-        \
-        keyCopy = newCopy->item[index].key;\
-        if( keyCopy ) {\
-          free( keyCopy );\
-          keyCopy = NULL;\
-        }\
-      }\
-    }\
-    \
-    free( newCopy );\
-    newCopy = NULL;\
-    \
-    return NULL;\
-  }
-
-/*
- *  Unsigned Key Array definition/implementation
- */
-
-  #define DECLARE_UINT_KEYARRAY_TYPES(\
-      typeName, dataType )\
-  typedef struct typeName##Item {\
-    unsigned key;\
-    dataType data;\
-  } typeName##Item;\
-  \
-  typedef struct typeName {\
-    size_t reservedCount;\
-    size_t itemCount;\
-    typeName##Item* item;\
-  } typeName;
-
-  #define DECLARE_UINT_KEYARRAY_CREATE( funcName, listType )\
-  listType* funcName( size_t reserveCount ) {\
-    listType* newKeyArray = NULL;\
-    \
-    newKeyArray = (listType*)calloc(1, sizeof(listType));\
-    if( newKeyArray == NULL ) {\
-      goto ReturnError;\
-    }\
-    \
-    if( reserveCount ) {\
-      newKeyArray->item =\
-        (listType##Item*)calloc(reserveCount, sizeof(listType##Item));\
-      if( newKeyArray->item == NULL ) {\
-        goto ReturnError;\
-      }\
-      \
-      newKeyArray->reservedCount = reserveCount;\
-    }\
-    return newKeyArray;\
-    \
-  ReturnError:\
-    if( newKeyArray ) {\
-      if( newKeyArray->item ) {\
-        free( newKeyArray->item );\
-        newKeyArray->item = NULL;\
-      }\
-      free( newKeyArray );\
-      newKeyArray = NULL;\
-    }\
-    return NULL;\
-  }
-
-  #define DECLARE_UINT_KEYARRAY_FREE( funcName, listType, freeDataFunc )\
-  void funcName( listType** keyList ) {\
-    size_t index;\
-    size_t itemCount;\
-    \
-    if( keyList && (*keyList) ) {\
-      itemCount = (*keyList)->itemCount;\
-      for( index = 0; index < itemCount; index++ ) {\
-        freeDataFunc( &((*keyList)->item[index].data) );\
-      }\
-      \
-      free( (*keyList) );\
-      (*keyList) = NULL;\
-    }\
-  }
-
-  #define DECLARE_UINT_KEYARRAY_INSERT( funcName, listType, dataType )\
-  int funcName( listType* keyList,\
-      unsigned key, dataType* data ) {\
-    unsigned leftIndex;\
-    unsigned insertIndex;\
-    unsigned rightIndex;\
-    unsigned prevCount;\
-    unsigned reservedCount;\
-    unsigned itemCount;\
-    listType##Item* item;\
-    \
-    if( !(keyList && data) ) {\
-      return 0;\
-    }\
-    \
-    /* Grow list, if necessary */\
-    reservedCount = keyList->reservedCount;\
-    itemCount = keyList->itemCount;\
-    item = keyList->item;\
-    \
-    if( itemCount == reservedCount ) {\
-      prevCount = reservedCount;\
-      reservedCount += 8;\
-      if( prevCount > reservedCount ) {\
-        return 0;\
-      }\
-      \
-      item = realloc(item, reservedCount * sizeof(listType##Item));\
-      if( item == NULL ) {\
-        return 0;\
-      }\
-      keyList->reservedCount = reservedCount;\
-      keyList->item = item;\
-    }\
-    \
-    /* Search for insert position */\
-    leftIndex = 0;\
-    rightIndex = itemCount;\
-    insertIndex = itemCount / 2;\
-    \
-    while( leftIndex < rightIndex ) {\
-      if( item[insertIndex].key == key ) {\
-        return 0;\
-      }\
-      \
-      if( item[insertIndex].key > key ) {\
-        rightIndex = insertIndex;\
-      } else {\
-        leftIndex = insertIndex + 1;\
-      }\
-      \
-      insertIndex = (leftIndex + rightIndex) / 2;\
-    }\
-    \
-    /* Move data past insertion point up, if necessary */\
-    memmove( &(item[insertIndex + 1]), &(item[insertIndex]),\
-        (itemCount - insertIndex) * sizeof(listType##Item) );\
-    \
-    /* Insert item */\
-    item[insertIndex].key = key;\
-    if( data ) {\
-      memcpy( &(item[insertIndex].data), data, sizeof(dataType) );\
-    }\
-    \
-    keyList->itemCount++;\
-    \
-    return 1;\
-  }
-
-  #define DECLARE_UINT_KEYARRAY_REMOVE( funcName, listType, freeDataFunc )\
-  void funcName( listType* keyList, unsigned key ) {\
-    unsigned leftIndex;\
-    unsigned rightIndex;\
-    unsigned removeIndex;\
-    unsigned reservedCount;\
-    unsigned itemCount;\
-    listType##Item* item;\
-    \
-    if( !(keyList && keyList->item) ) {\
-      return;\
-    }\
-    \
-    reservedCount = keyList->reservedCount;\
-    itemCount = keyList->itemCount;\
-    item = keyList->item;\
-    \
-    /* Search for insert position */\
-    leftIndex = 0;\
-    rightIndex = itemCount;\
-    removeIndex = itemCount / 2;\
-    \
-    while( leftIndex < rightIndex ) {\
-      if( item[removeIndex].key == key ) {\
-        freeDataFunc( &(item[removeIndex].data) );\
-        \
-        if( itemCount ) {\
-          itemCount--;\
-          \
-          memcpy( &(item[removeIndex]), &(item[removeIndex + 1]),\
-            (itemCount - removeIndex) * sizeof(listType##Item) );\
-          \
-          keyList->itemCount = itemCount;\
-        }\
-        \
-        memset( &(item[itemCount]), 0, sizeof(listType##Item) );\
-        \
-        return;\
-      }\
-      \
-      if( item[removeIndex].key > key ) {\
-        rightIndex = removeIndex;\
-      } else {\
-        leftIndex = removeIndex + 1;\
-      }\
-      \
-      removeIndex = (leftIndex + rightIndex) / 2;\
-    }\
-  }
-
-  #define DECLARE_UINT_KEYARRAY_RETRIEVE( funcName, listType, dataType )\
-  int funcName( listType* keyList, unsigned key,\
-      dataType* destData ) {\
-    unsigned leftIndex;\
-    unsigned rightIndex;\
-    unsigned retrieveIndex;\
-    unsigned reservedCount;\
-    unsigned itemCount;\
-    listType##Item* item;\
-    \
-    if( !(keyList && keyList->item && destData) ) {\
-      return 0;\
-    }\
-    \
-    reservedCount = keyList->reservedCount;\
-    itemCount = keyList->itemCount;\
-    item = keyList->item;\
-    \
-    /* Search for insert position */\
-    leftIndex = 0;\
-    rightIndex = itemCount;\
-    retrieveIndex = itemCount / 2;\
-    \
-    while( leftIndex < rightIndex ) {\
-      if( item[retrieveIndex].key == key ) {\
-        memcpy( destData, &(item[retrieveIndex].data), sizeof(dataType) );\
-        return 1;\
-      }\
-      \
-      if( item[retrieveIndex].key > key ) {\
-        rightIndex = retrieveIndex;\
-      } else {\
-        leftIndex = retrieveIndex + 1;\
-      }\
-      \
-      retrieveIndex = (leftIndex + rightIndex) / 2;\
-    }\
-    \
-    return 0;\
-  }
-
-  #define DECLARE_UINT_KEYARRAY_RELEASEUNUSED( funcName, listType )\
-  void funcName( listType* keyList ) {\
-    listType##Item* item;\
-    \
-    if( keyList == NULL ) {\
-      return;\
-    }\
-    \
-    if( keyList->item && keyList->itemCount ) {\
-      /* Resize to remove reserved space */\
-      item = realloc(keyList->item,\
-        keyList->itemCount * sizeof(listType##Item));\
-      if( item ) {\
-        keyList->item = item;\
-        keyList->reservedCount = keyList->itemCount;\
-      }\
-    } else {\
-      /* Deallocate */\
-      keyList->reservedCount = 0;\
-      keyList->itemCount = 0;\
-      if( keyList->item ) {\
-        free( keyList->item );\
-        keyList->item = NULL;\
-      }\
-    }\
-  }
-
-  #define DECLARE_UINT_KEYARRAY_COPY( funcName, listType, dataType,\
-      copyDataFunc, freeDataFunc )\
-  listType* funcName( listType* sourceList ) {\
-    listType* newCopy = NULL;\
-    listType##Item* sourceItem = NULL;\
-    size_t reservedCount = 0;\
-    size_t itemCount = 0;\
-    size_t index;\
-    \
-    if( sourceList == NULL ) {\
-      return NULL;\
-    }\
-    \
-    /* Attempt to allocate list object */\
-    newCopy = calloc(1, sizeof(listType));\
-    if( newCopy == NULL ) {\
-      goto ReturnError;\
-    }\
-    \
-    /* Initialize important variables */\
-    reservedCount = sourceList->reservedCount;\
-    itemCount = sourceList->itemCount;\
-    sourceItem = sourceList->item;\
-    \
-    /* A list with no items is valid */\
-    if( !(reservedCount && itemCount && sourceItem) ) {\
-      return newCopy;\
-    }\
-    \
-    /* Copy data, then copy the Uint keys */\
-    newCopy->item = malloc(reservedCount * sizeof(listType##Item));\
-    if( newCopy->item == NULL ) {\
-      goto ReturnError;\
-    }\
-    \
-    for( index = 0; index < itemCount; index++ ) {\
-      copyDataFunc( &(newCopy->item[index].data),\
-          &(sourceItem[index].data) );\
-      \
-      newCopy->item[index].key = sourceItem[index].key;\
-    }\
-    \
-    newCopy->reservedCount = reservedCount;\
-    newCopy->itemCount = itemCount;\
-    \
-    return newCopy;\
-    \
-  ReturnError:\
-    if( newCopy == NULL ) {\
-      return NULL;\
-    }\
-    \
-    if( newCopy->item ) {\
-      for( index = 0; index < itemCount; index++ ) {\
-        freeDataFunc( &(newCopy->item[index].data) );\
-      }\
-    }\
-    \
-    free( newCopy );\
-    newCopy = NULL;\
-    \
-    return NULL;\
-  }
+    // = defaultValue
+    TokenVal initVal;
+  } TypeSpec;
 
 /*
  *  Symbol table declarations
  */
 
-/*
- *  Symbol declarations
- */
+  typedef struct TypeAliasSymbol {
+    rstring* typeName;
+  } TypeAliasSymbol;
+
+  typedef struct TypeSymbol {
+    TypeSpec typeSpec;
+    uint8_t* defaultVal;
+    unsigned valType;
+    size_t valSize;
+  } TypeSymbol;
+
+  typedef struct ImportSymbol {
+  } ImportSymbol;
+
+  enum SymType {
+    symNone = 0,
+    symBaseType,
+    symType,
+    symFuncImport
+  };
+
+  typedef struct SymItem {
+    unsigned token;
+
+    union {
+      TypeAliasSymbol typeAlias;
+      TypeSymbol typeSym;
+      ImportSymbol importSym;
+    };
+  } SymItem;
+
+  DECLARE_STRING_KEYARRAY_TYPES( SymTable, SymItem )
+
+  void CopySymItem( SymItem* dest, SymItem* source );
+  void FreeSymItem( SymItem* symItem );
+
+  DECLARE_STRING_KEYARRAY_CREATE( CreateSymTab, SymTable )
+  DECLARE_STRING_KEYARRAY_FREE( ReleaseSymTab, SymTable, FreeSymItem )
+
+  DECLARE_STRING_KEYARRAY_INSERT( InsertSymbol, SymTable, SymItem )
+  DECLARE_STRING_KEYARRAY_REMOVE( RemoveSymbol, SymTable, FreeSymItem )
+
+  DECLARE_STRING_KEYARRAY_RETRIEVE( RetrieveSymbol, SymTable, SymItem )
+
+  bool DeclareType( SymTable* symTab, char* definedType, char* typeName, TokenVal* initVal );
+  bool DeclareNewType( SymTable* symTab, char* name, TypeSpec* typeSpec );
 
 /*
  *  Lexer declarations
@@ -1168,6 +589,8 @@
 
   unsigned ReadOperator( RetFile* source );
 
+  unsigned ReadTypeSpec( RetFile* source, TypeSpec* destSpec );
+
 /*
  *  Expression parser declarations
  */
@@ -1183,6 +606,7 @@
     FILE* dataHandle;
     FILE* bssHandle;
     rstring* fileName;
+    bool runDeclared;
   } AsmGen;
 
   AsmGen* CreateAsm( char* fileName, size_t nameLength );
@@ -1194,9 +618,31 @@
  *  Parser declarations
  */
 
+  typedef struct _IfStack {
+    unsigned block;
+    unsigned currentIf;
+    unsigned nextIf;
+    unsigned endIf;
+  } IfStack;
+
+  typedef struct _LoopStack {
+  } LoopStack;
+
   void ParseProgramHeader();
-  void ParseTopLevel();
   void EndParse();
+
+  void ParseType();
+  void ParseNewType();
+  void ParseImport();
+
+  void ParseIf( SymTable* localSymTab, IfStack* ifStack );
+  void ParseFor( SymTable* localSymTab, LoopStack* loopStack );
+
+  void ParseStatement( SymTable* localSymTab );
+
+  void ParseRun();
+
+  void ParseTopLevel();
 
 /*
  *  Main program
@@ -1204,11 +650,11 @@
 
   void PrintBanner() {
     printf( "\nOrigo Alpha\n" );
-    printf( "Copyright 2019 Orlando Llanes\n\n" );
+    printf( "Copyright 2019 Orlando Llanes\n" );
   }
 
   void PrintUsage() {
-    printf( "usage: origo source[.ret] [binary[.ext]]\n" );
+    printf( "\nusage: origo source[.ret] [binary[.ext]]\n" );
   }
 
   rstring* retFileName = NULL;
@@ -1218,6 +664,8 @@
 
   RetFile* retSource = NULL;
   AsmGen* asmGen = NULL;
+
+  SymTable* symTab = NULL;
 
   void Cleanup() {
     if( retFileName ) {
@@ -1242,6 +690,8 @@
 
     CloseRet( &retSource );
     CloseRet( &asmGen );
+
+    ReleaseSymTab( &symTab );
   }
 
 int main( int argc, char* argv[] ) {
@@ -1323,29 +773,6 @@ int main( int argc, char* argv[] ) {
 
   ParseProgramHeader();
   ParseTopLevel();
-
-  // Begin: Temporary code to be replaced by parser
-  fprintf( asmGen->asmHandle,
-    "run:\n"
-    "..start:\n"
-    "\n"
-    "  push    ebp\n"
-    "  mov     ebp, esp\n"
-    "\n"
-    "  mov     esp, ebp\n"
-    "  pop     ebp\n"
-    "\n"
-    "  push   dword 123\n"
-    "  call   [ExitProcess]\n"
-  );
-
-  fprintf( asmGen->importHandle,
-    "\n"
-    "  extern ExitProcess\n"
-    "  import ExitProcess kernel32.dll\n"
-  );
-  // End: Temporary code to be replaced by parser
-
   EndParse();
 
   CloseRet( &retSource );
@@ -1441,7 +868,7 @@ int main( int argc, char* argv[] ) {
  *  Error reporting implementation
  */
 
-  // Logic warnings
+  // Logic warning reporting
   const char* warningString[] = {
     "No warning"
   };
@@ -1450,9 +877,9 @@ int main( int argc, char* argv[] ) {
 
   void Warning( unsigned line, unsigned column, unsigned warningCode ) {
     if( warningCode && (warningCode < warningCount) ) {
-      printf( "Expected(L%u, C%u): %s\n", line, column, warningString[warningCode] );
+      printf( "  Warning(L%u, C%u): %s\n", line, column, warningString[warningCode] );
     } else if( warningCode ) {
-      printf( "Expected: Unknown code %u\n", warningCode );
+      printf( "  Warning: code %u\n", warningCode );
     }
   }
 
@@ -1468,9 +895,9 @@ int main( int argc, char* argv[] ) {
 
   void Expected( unsigned line, unsigned column, unsigned expectedCode ) {
     if( expectedCode && (expectedCode < expectedCount) ) {
-      printf( "Expected(L%u, C%u): %s\n", line, column, expectedString[expectedCode] );
+      printf( "  Expected(L%u, C%u): %s\n", line, column, expectedString[expectedCode] );
     } else if( expectedCode ) {
-      printf( "Expected: Unknown code %u\n", expectedCode );
+      printf( "  Expected: code %u\n", expectedCode );
     }
 
     exit( expectedCode );
@@ -1491,9 +918,9 @@ int main( int argc, char* argv[] ) {
 
   void Error( unsigned errorCode, char* errorText ) {
     if( errorCode && (errorCode < errorCount) && errorText ) {
-      printf( "ERROR(%u) %s: %s\n", errorCode, errorString[errorCode], errorText );
+      printf( "  ERROR(%u) %s: %s\n", errorCode, errorString[errorCode], errorText );
     } else if( errorCode ) {
-      printf( "Unknown error code %u\n", errorCode );
+      printf( "  ERROR: code %u\n", errorCode );
     }
 
     exit( errorCode );
@@ -1914,12 +1341,58 @@ int main( int argc, char* argv[] ) {
   }
 
 /*
- *  Symbol table implementation
+ *  Type specifier implementation
  */
 
 /*
- *  Symbol implementation
+ *  Symbol table implementation
  */
+
+  void CopySymItem( SymItem* dest, SymItem* source ) {
+  }
+
+  void FreeSymItem( SymItem* symItem ) {
+    if( symItem == NULL ) {
+      return;
+    }
+
+    switch( symItem->token ) {
+    case symNone:
+      return;
+
+    case symBaseType:
+      return;
+
+    case symType:
+      if( symItem->typeSym.typeSpec.dimension ) {
+        free( symItem->typeSym.typeSpec.dimension );
+        symItem->typeSym.typeSpec.dimension = NULL;
+      }
+      return;
+
+    case symFuncImport:
+      return;
+    }
+  }
+
+  bool DeclareType( SymTable* symTab, char* definedType, char* typeName, TokenVal* initVal ) {
+    SymItem typeItem = {};
+
+    return false;
+  }
+
+  bool DeclareNewType( SymTable* symTab, char* name, TypeSpec* typeSpec ) {
+    SymItem typeItem = {};
+
+    if( !(symTab && name && (*name) && typeSpec) ) {
+      return false;
+    }
+
+    return false;
+
+  ReturnError:
+    return false;
+  }
 
 /*
  *  Lexer implementation
@@ -2450,6 +1923,10 @@ int main( int argc, char* argv[] ) {
     return token;
   }
 
+  unsigned ReadTypeSpec( RetFile* source, TypeSpec* destSpec ) {
+    return 0;
+  }
+
 /*
  *  Expression parser implementation
  */
@@ -2593,14 +2070,15 @@ int main( int argc, char* argv[] ) {
     }
 
     ///TODO: Allocate symbol table
+    symTab = CreateSymTab(0);
+    if( symTab == NULL ) {
+      Error( unableToCreate, "Symbol Table" );
+    }
 
     // Write start of assembler file
     fprintf( asmGen->asmHandle,
       "\n"
-      "; program %s\n", rstrtext(identStr)
-    );
-
-    fprintf( asmGen->asmHandle,
+      "; program %s\n"
       "\n"
       "  CPU 386\n"
       "  BITS 32\n"
@@ -2608,16 +2086,14 @@ int main( int argc, char* argv[] ) {
       "  %%include \"import.rxi\"\n"
       "\n"
       "section .text use32\n"
-      "\n"
+      "\n",
+      rstrtext(identStr)
     );
 
     if( identStr ) {
       free( identStr );
       identStr = NULL;
     }
-  }
-
-  void ParseTopLevel() {
   }
 
   void EndParse() {
@@ -2635,4 +2111,113 @@ int main( int argc, char* argv[] ) {
       "\n"
       "  %%include \"bss.rxi\"\n"
     );
+  }
+
+  void ParseType() {
+  }
+
+  void ParseNewType() {
+  }
+
+  void ParseImport() {
+  }
+
+  void ParseIf( SymTable* localSymTab, IfStack* ifStack ) {
+    ///TODO: IfStack usage [draft]
+
+    //  if COND
+    //    currentIf = nextIf++
+    //  then STATEMENT
+    //  [".nextif", hex(block), hex(nextIf), ":"]
+    //  [".endif", hex(block), hex(endIf), ":"]
+
+    //  if COND
+    //    currentIf = nextIf++
+    //    ...
+    //    jmp endIf
+    //
+    //  [".nextif", hex(block), hex(currentIf), ":"]
+    //  elseif COND
+    //    currentIf = nextIf++
+    //    ...
+    //    jmp endIf
+    //
+    //  [".nextif", hex(block), hex(currentIf), ":"]
+    //  else
+    //    ...
+    //  [".endif", hex(block), hex(endIf), ":"]
+    //  endif
+  }
+
+  void ParseFor( SymTable* localSymTab, LoopStack* loopStack ) {
+  }
+
+  void ParseStatement( SymTable* localSymTab ) {
+  }
+
+  void ParseRun() {
+  }
+
+  void ParseTopLevel() {
+    rstring* identStr = NULL;
+    unsigned token = 0;
+    unsigned hashCode = 0;
+    unsigned line = 0;
+    unsigned column = 0;
+
+    do {
+      SkipComments( retSource );
+
+      line = retSource->line;
+      column = retSource->column;
+
+      if( ReadIdent(retSource, &identStr, &hashCode) == false ) {
+        ///TODO: Error.
+      }
+
+      token = FindKeyword(rstrtext(identStr));
+
+      switch( token ) {
+      case rsvdType:
+        ParseType();
+        break;
+
+      case rsvdNewType:
+        ParseNewType();
+        break;
+
+      case rsvdImport:
+        ParseImport();
+        break;
+
+      case rsvdRun:
+        ParseRun();
+        break;
+
+      default:
+        Expected( line, column, expectedTopLevel );
+      }
+    } while( token );
+
+    // Begin: Temporary code to be replaced by parser
+    fprintf( asmGen->asmHandle,
+      "run:\n"
+      "..start:\n"
+      "\n"
+      "  push    ebp\n"
+      "  mov     ebp, esp\n"
+      "\n"
+      "  mov     esp, ebp\n"
+      "  pop     ebp\n"
+      "\n"
+      "  push   dword 123\n"
+      "  call   [ExitProcess]\n"
+    );
+  
+    fprintf( asmGen->importHandle,
+      "\n"
+      "  extern ExitProcess\n"
+      "  import ExitProcess kernel32.dll\n"
+    );
+    // End: Temporary code to be replaced by parser
   }

@@ -3,6 +3,7 @@ program Retineo
 /*
  * Executable meta data
  */
+/*
   versioninfo
     companyName 'Retineo'
     fileVersionString '0.01'
@@ -15,6 +16,7 @@ program Retineo
     fileType VFT_APP
     FileSubtype 0
   end
+*/
 
 /*
  *  Base types
