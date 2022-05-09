@@ -1,0 +1,199 @@
+
+##
+## Lexer declarations
+##
+
+SPACE = ' ' | tab | cr | lf | eol;
+
+SLCOMMENT = '//' * eol;
+MLCOMMENT = nest:'/*' * '*/';
+
+IDENT = _a..zA..Z{_a..zA..Z0..9};
+STRING = "'" * "'" | '"' * '"';
+
+FUNCSPEC = <[type:TYPESPEC] | [callspec:CALLSPEC]>
+
+TYPESPEC = POINTERSPEC | BASESPEC | FUNCTYPE;
+BASESPEC = (basetype:IDENT | customtype:IDENT) ['[' ARRAYINDEX {',' ARRAYINDEX} ']'];
+FUNCTYPE = 'func' <[TYPESPEC] | [CALLSPEC]> '(' [paramtype:TYPESPEC param:IDENT {',' [paramtype:TYPESPEC] param:IDENT} ')';
+ARRAYINDEX = quantity:CONSTEXPR | min:CONSTEXPR '..' max:CONSTEXPR;
+POINTERSPEC = pointer:'@' (basetype:IDENT | customtype:IDENT) ['[' [ARRAYINDEX {',' ARRAYINDEX}] ']'];
+
+BASETYPE =
+  int:'int' | int8:'int8' | int16:'int16' | int32:'int32' | int64:'int64' |
+  uint:'uint' | uint8:'uint8' | uint16:'uint16' | uint32:'uint32' | uint64:'uint64' |
+  char:'char' | bool:'bool';
+
+CALLSPEC = stdcall | cdecl;
+
+##
+## Parser declarations
+##
+
+# Statement declarations
+
+STATEMENT = 
+  labeldecl |
+  goto |
+  break |
+  next |
+  bind |
+  exit |
+  if |
+  for |
+  repeat |
+  while |
+  FUNCCALL |
+  METHODCALL |
+  ASSIGNEXPR;
+
+labeldecl = name:IDENT ':';
+
+goto = 'goto' name:IDENT;
+
+break = 'break' name:IDENT;
+
+next = 'next' name:IDENT;
+
+bind = 'bind' '(' OBJECTVAR ',' (interface:IDENT | method:IDENT) {',' (interface:IDENT | method:IDENT)} ')';
+
+exit = 'exit' '(' EXPR ')';
+
+if = ifthen | ifblock;
+ifthen = 'if' condition:CONSTEXPR 'then' STATEMENT;
+ifblock = if:'if' condition:CONSTEXPR
+  {STATEMENT}
+  {elseif:'elseif' condition:CONSTEXPR
+   {STATEMENT}}
+  [else
+    {STATEMENT}]
+  'endif';
+
+for = forto | fordownto | forin;
+forto = [name:IDENT ':'] 'for' index:VARREF '=' EXPR 'to' EXPR
+  {STATEMENT}
+  'endfor';
+fordownto = [name:IDENT ':'] 'for' index:VARREF '=' EXPR 'downto' EXPR
+  {STATEMENT}
+  'endfor';
+forin = [name:IDENT ':']'for' index:VARREF 'in' '[' value:CONSTEXPR {',' value:CONSTEXPR} ']'
+  {STATEMENT}
+  'endfor';
+
+repeat = [name:IDENT ':'] 'repeat'
+  {STATEMENT}
+  'when' condition:EXPR;
+
+while = [name:IDENT ':'] 'while' condition:EXPR
+  {STATEMENT}
+  'endwhile';
+
+FUNCCALL = ;
+METHODCALL = ;
+ASSIGNEXPR = ;
+
+# Top level declarations
+
+parse = 'program' namespace:IDENT
+  {declaration}
+  closetypes:eof;
+
+declaration =
+  enum |
+  union |
+  struct |
+  type |
+  const |
+  globalvar |
+  import |
+  funcdecl |
+  func |
+  object |
+  ctor |
+  dtor |
+  interface |
+  method |
+  operator |
+  unary |
+  main;
+
+enum = 'enum' name;IDENT
+  {TYPESPEC field:IDENT {',' field:IDENT}}
+'end';
+
+union = 'union' name:IDENT
+  {TYPESPEC field:IDENT {',' field:IDENT}}
+'end';
+
+struct = 'struct' name:IDENT
+	  {TYPESPEC field:IDENT {',' field:IDENT}}
+'end';
+
+type = 'type' TYPESPEC name:IDENT;
+
+const = 'const' TYPESPEC name:IDENT '=' CONSTEXPR;
+
+globalvar = 'var'
+  {TYPESPEC IDENT {',' IDENT}}
+'end';
+
+import = 'import' FUNCSPEC name:IDENT '(' [paramtype:TYPESPEC param:IDENT {',' [paramtype:TYPESPEC] param:IDENT}] ')'
+  'from' STRING
+  ['as' name:IDENT];
+
+funcdecl = 'funcdecl' FUNCSPEC name:IDENT '(' [paramtype:TYPESPEC param:IDENT {',' [paramtype:TYPESPEC] param:IDENT}] ')';
+
+func = typedfunc | untypedfunc;
+typedfunc = 'func' FUNCSPEC name:IDENT '(' [paramtype:TYPESPEC param:IDENT {',' [paramtype:TYPESPEC] param:IDENT}] ')'
+  {localvar}
+  {STATEMENT | return value:EXPR}
+  'end';
+untypedfunc = 'func' [CALLSPEC] name:IDENT '(' [paramtype:TYPESPEC param:IDENT {',' [paramtype:TYPESPEC] param:IDENT}] ')'
+  {localvar}
+  {STATEMENT | return}
+  'end';
+
+object = 'object' name:IDENT
+  [inherits object:IDENT {',' object:IDENT}]
+  {mutable:'mutable' |
+  immutable:'immutable' |
+  membertype:TYPESPEC member:IDENT {',' member:IDENT}}
+  'end';
+
+ctor = 'ctor' object:IDENT '(' ')'
+  {STATEMENT | return:'return' BOOLEXPR}
+  'end';
+
+dtor = 'dtor' object:IDENT '(' ')'
+  {STATEMENT | return:'return' BOOLEXPR}
+  'end';
+
+interface = 'interface' name:IDENT
+  ['inherits' interface:IDENT {',' interface:IDENT}]
+  {'method' [type:TYPESPEC] name:IDENT '(' [paramtype:TYPESPEC param:IDENT {',' [paramtype:TYPESPEC] param:IDENT}] ')'}
+  'end';
+
+method = typedmethod | untypedmethod;
+typedfunc = 'method' type:TYPESPEC interface:IDENT '.' name:IDENT '(' [paramtype:TYPESPEC param:IDENT {',' [paramtype:TYPESPEC] param:IDENT}] ')'
+  {localvar}
+  {STATEMENT | return value:EXPR | OBJECTCALL | OBJECTASSIGNEXPR}
+  'end';
+untypedfunc = 'method' interface:IDENT '.' name:IDENT '(' [paramtype:TYPESPEC param:IDENT {',' [paramtype:TYPESPEC] param:IDENT}] ')'
+  {localvar}
+  {STATEMENT | return | OBJECTCALL | OBJECTASSIGNEXPR}
+  'end';
+
+operator = 'operator' type:TYPESPEC op operand:TYPESPEC {',' operand:TYPESPEC}
+  {localvar}
+  {STATEMENT | OPASSIGNEXPR};
+  'end';
+
+unary = 'unary' ((type:TYPESPEC unaryop) | (unaryop type:TYPESPEC))
+  {localvar}
+  {STATEMENT | UNARYASSIGNEXPR};
+  'end';
+
+main = 'run'
+  {localvar}
+  {STATEMENT}
+  'end';
