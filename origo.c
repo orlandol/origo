@@ -8,6 +8,10 @@
   Declaraytions
 */
 
+/// System helper declarations
+
+unsigned RunProgram( const char* programName, const char** programArgs, int* exitCode );
+
 /// String declarations
 
 char* CreateString( const char* value );
@@ -67,6 +71,8 @@ void Cleanup() {
 }
 
 int main( int argc, char** argv ) {
+  int rpResult = 0;
+
   atexit( Cleanup );
 
   ShowBanner();
@@ -88,6 +94,14 @@ int main( int argc, char** argv ) {
     exit(1);
   }
 
+  int tccResult = 0;
+  char* tccOptions[] = {
+    " -xc ",
+    argv[2],
+    NULL
+  };
+  rpResult = RunProgram("tools\\tcc\\tcc.exe", tccOptions, &tccResult);
+
   Cleanup();
 
   return 0;
@@ -96,6 +110,23 @@ int main( int argc, char** argv ) {
 /*
   Implementations
 */
+
+/// System helper implementation
+
+#include <process.h>
+
+unsigned RunProgram( const char* programName, const char** programArgs, int* exitCode ) {
+    int runResult = 0;
+
+    runResult = spawnvp(_P_WAIT, programName, programArgs);
+
+    if( runResult != -1 ) {
+      *exitCode = runResult;
+      return 1;
+    }
+
+    return 0;
+}
 
 /// String implementation
 
@@ -145,6 +176,7 @@ Parser* OpenGrammar( const char* fileName ) {
     newParser->nextColumn = 1;
  
     ReadChar( newParser );
+printf( "%c\n", newParser->ch );
 
     return newParser;
   }
@@ -168,7 +200,7 @@ void CloseGrammar( Parser** sourcePtr ) {
 }
 
 int ReadChar( Parser* source ) {
-  if( !(source && source->handle) ) { return 0; }
+  if( !(source && source->handle) ) { return EOF; }
 
   source->ch = fgetc(source->handle);
   if( source->ch != EOF ) {
@@ -186,6 +218,10 @@ int ReadChar( Parser* source ) {
   }
 
   return EOF;
+}
+
+unsigned SkipCommentsAndSpace( Parser* source ) {
+  return 0;
 }
 
 /// Compiler implementation

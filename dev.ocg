@@ -1,0 +1,20 @@
+
+// Single-line comment
+
+/* Multi-line /* Nested */ Comment */
+
+copyright = "(C) 2022 Orlando Llanes";
+version = "0.1 Alpa";
+exeversion = 0.1.0.0;
+
+ident = _a/zA/Z{_a/zA/Z0/9};
+
+parse = 'program' namespace
+  {declaration}
+  closetypes:eof;
+
+declaration = enum;
+
+enum = 'enum' name
+  {field {',' alias} ['=' eval:EXPR]}
+  'end';
