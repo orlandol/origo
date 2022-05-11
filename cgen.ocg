@@ -1,0 +1,20 @@
+
+// Single-line comment
+/* Multi-line comment */
+/* Multi-line /* nested */ comment */
+
+copyright = "(C) Copyright 2022 Orlando Llanes";
+description = "Compiler Generator Development File";
+version = "0.1.0.0"
+
+ident = _a-zA-Z0-9{_a-zA-Z0-9};
+
+parse = 'program' namespace
+  {declaration}
+  closetypes:eof;
+
+declaration = enum;
+
+enum = 'enum' name
+  {field {',' alias} ['=' eval:expression]}
+  'end';
