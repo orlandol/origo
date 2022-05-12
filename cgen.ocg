@@ -3,9 +3,10 @@
 /* Multi-line comment */
 /* Multi-line /* nested */ comment */
 
-copyright = "(C) Copyright 2022 Orlando Llanes";
+copyright = "(C) Copyright YEAR NAME";
 description = "Compiler Generator Development File";
-version = "0.1.0.0"
+version = 0.1;
+verstring = "0.1 Alpha";
 
 ident = _a-zA-Z0-9{_a-zA-Z0-9};
 

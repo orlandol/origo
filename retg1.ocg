@@ -1,38 +1,39 @@
 
-##
-## Lexer declarations
-##
+/*
+ * Lexer declarations
+ */
 
-SPACE = ' ' | tab | cr | lf | eol;
+space = ' ' | tab | cr | lf | eol;
 
-SLCOMMENT = '//' * eol;
-MLCOMMENT = nest:'/*' * '*/';
+slcomment = '//' * eol;
+mlcomment = nest:'/*' * '*/';
 
-IDENT = _a..zA..Z{_a..zA..Z0..9};
-STRING = "'" * "'" | '"' * '"';
+ident = _a-zA-Z{_a-zA-Z0-9};
+string = "'" * "'" | '"' * '"';
 
-FUNCSPEC = <[type:TYPESPEC] | [callspec:CALLSPEC]>
+funcspec = {[type:typespec] | [callspec:callspec]}
 
-TYPESPEC = POINTERSPEC | BASESPEC | FUNCTYPE;
-BASESPEC = (basetype:IDENT | customtype:IDENT) ['[' ARRAYINDEX {',' ARRAYINDEX} ']'];
-FUNCTYPE = 'func' <[TYPESPEC] | [CALLSPEC]> '(' [paramtype:TYPESPEC param:IDENT {',' [paramtype:TYPESPEC] param:IDENT} ')';
-ARRAYINDEX = quantity:CONSTEXPR | min:CONSTEXPR '..' max:CONSTEXPR;
-POINTERSPEC = pointer:'@' (basetype:IDENT | customtype:IDENT) ['[' [ARRAYINDEX {',' ARRAYINDEX}] ']'];
+typespec = pointerspec | basespec | functype;
+basespec = (basetype:IDENT | customtype:IDENT) ['[' arrayindex {',' arrayindex} ']'];
+functype = 'func' {[typespec] | [callspec]} '('
+  [paramtype param {',' [paramtype] param} ')';
+arrayindex = quantity/eval:expression | min/eval:expression '..' max/eval:expression;
+pointerspec = pointer:'@' (basetype | customtype) ['[' [arrayindex {',' arrayindex}] ']'];
 
-BASETYPE =
+basetype =
   int:'int' | int8:'int8' | int16:'int16' | int32:'int32' | int64:'int64' |
   uint:'uint' | uint8:'uint8' | uint16:'uint16' | uint32:'uint32' | uint64:'uint64' |
   char:'char' | bool:'bool';
 
-CALLSPEC = stdcall | cdecl;
+callspec = stdcall | cdecl;
 
-##
-## Parser declarations
-##
+/*
+ * Parser declarations
+ */
 
-# Statement declarations
+/// statement declarations
 
-STATEMENT = 
+statement = 
   labeldecl |
   goto |
   break |
@@ -55,44 +56,44 @@ break = 'break' name:IDENT;
 
 next = 'next' name:IDENT;
 
-bind = 'bind' '(' OBJECTVAR ',' (interface:IDENT | method:IDENT) {',' (interface:IDENT | method:IDENT)} ')';
+bind = 'bind' '(' objectvar ',' (interfacename | methodname) {',' (interfacename | methodname)} ')';
 
 exit = 'exit' '(' EXPR ')';
 
 if = ifthen | ifblock;
-ifthen = 'if' condition:CONSTEXPR 'then' STATEMENT;
-ifblock = if:'if' condition:CONSTEXPR
-  {STATEMENT}
-  {elseif:'elseif' condition:CONSTEXPR
-   {STATEMENT}}
+ifthen = 'if' condition:eval:expression 'then' statement;
+ifblock = if:'if' condition:eval:expression
+  {statement}
+  {elseif:'elseif' condition:eval:expression
+   {statement}}
   [else
-    {STATEMENT}]
+    {statement}]
   'endif';
 
 for = forto | fordownto | forin;
 forto = [name:IDENT ':'] 'for' index:VARREF '=' EXPR 'to' EXPR
-  {STATEMENT}
+  {statement}
   'endfor';
 fordownto = [name:IDENT ':'] 'for' index:VARREF '=' EXPR 'downto' EXPR
-  {STATEMENT}
+  {statement}
   'endfor';
-forin = [name:IDENT ':']'for' index:VARREF 'in' '[' value:CONSTEXPR {',' value:CONSTEXPR} ']'
-  {STATEMENT}
+forin = [name:IDENT ':']'for' index:VARREF 'in' '[' value:eval:expression {',' value:eval:expression} ']'
+  {statement}
   'endfor';
 
 repeat = [name:IDENT ':'] 'repeat'
-  {STATEMENT}
+  {statement}
   'when' condition:EXPR;
 
 while = [name:IDENT ':'] 'while' condition:EXPR
-  {STATEMENT}
+  {statement}
   'endwhile';
 
 FUNCCALL = ;
 METHODCALL = ;
 ASSIGNEXPR = ;
 
-# Top level declarations
+/// Top level declarations
 
 parse = 'program' namespace:IDENT
   {declaration}
@@ -118,82 +119,82 @@ declaration =
   main;
 
 enum = 'enum' name;IDENT
-  {TYPESPEC field:IDENT {',' field:IDENT}}
+  {typespec field:IDENT {',' field:IDENT}}
 'end';
 
 union = 'union' name:IDENT
-  {TYPESPEC field:IDENT {',' field:IDENT}}
+  {typespec field:IDENT {',' field:IDENT}}
 'end';
 
 struct = 'struct' name:IDENT
-	  {TYPESPEC field:IDENT {',' field:IDENT}}
+	  {typespec field:IDENT {',' field:IDENT}}
 'end';
 
-type = 'type' TYPESPEC name:IDENT;
+type = 'type' typespec name:IDENT;
 
-const = 'const' TYPESPEC name:IDENT '=' CONSTEXPR;
+const = 'const' typespec name:IDENT '=' eval:expression;
 
 globalvar = 'var'
-  {TYPESPEC IDENT {',' IDENT}}
+  {typespec IDENT {',' IDENT}}
 'end';
 
-import = 'import' FUNCSPEC name:IDENT '(' [paramtype:TYPESPEC param:IDENT {',' [paramtype:TYPESPEC] param:IDENT}] ')'
+import = 'import' funcspec name:IDENT '(' [paramtype:typespec param:IDENT {',' [paramtype:typespec] param:IDENT}] ')'
   'from' STRING
   ['as' name:IDENT];
 
-funcdecl = 'funcdecl' FUNCSPEC name:IDENT '(' [paramtype:TYPESPEC param:IDENT {',' [paramtype:TYPESPEC] param:IDENT}] ')';
+funcdecl = 'funcdecl' funcspec name:IDENT '(' [paramtype:typespec param:IDENT {',' [paramtype:typespec] param:IDENT}] ')';
 
 func = typedfunc | untypedfunc;
-typedfunc = 'func' FUNCSPEC name:IDENT '(' [paramtype:TYPESPEC param:IDENT {',' [paramtype:TYPESPEC] param:IDENT}] ')'
+typedfunc = 'func' funcspec name:IDENT '(' [paramtype:typespec param:IDENT {',' [paramtype:typespec] param:IDENT}] ')'
   {localvar}
-  {STATEMENT | return value:EXPR}
+  {statement | return value:EXPR}
   'end';
-untypedfunc = 'func' [CALLSPEC] name:IDENT '(' [paramtype:TYPESPEC param:IDENT {',' [paramtype:TYPESPEC] param:IDENT}] ')'
+untypedfunc = 'func' [callspec] name:IDENT '(' [paramtype:typespec param:IDENT {',' [paramtype:typespec] param:IDENT}] ')'
   {localvar}
-  {STATEMENT | return}
+  {statement | return}
   'end';
 
 object = 'object' name:IDENT
   [inherits object:IDENT {',' object:IDENT}]
   {mutable:'mutable' |
   immutable:'immutable' |
-  membertype:TYPESPEC member:IDENT {',' member:IDENT}}
+  membertype:typespec member:IDENT {',' member:IDENT}}
   'end';
 
 ctor = 'ctor' object:IDENT '(' ')'
-  {STATEMENT | return:'return' BOOLEXPR}
+  {statement | return:'return' BOOLEXPR}
   'end';
 
 dtor = 'dtor' object:IDENT '(' ')'
-  {STATEMENT | return:'return' BOOLEXPR}
+  {statement | return:'return' BOOLEXPR}
   'end';
 
 interface = 'interface' name:IDENT
   ['inherits' interface:IDENT {',' interface:IDENT}]
-  {'method' [type:TYPESPEC] name:IDENT '(' [paramtype:TYPESPEC param:IDENT {',' [paramtype:TYPESPEC] param:IDENT}] ')'}
+  {'method' [type:typespec] name:IDENT '(' [paramtype:typespec param:IDENT {',' [paramtype:typespec] param:IDENT}] ')'}
   'end';
 
 method = typedmethod | untypedmethod;
-typedfunc = 'method' type:TYPESPEC interface:IDENT '.' name:IDENT '(' [paramtype:TYPESPEC param:IDENT {',' [paramtype:TYPESPEC] param:IDENT}] ')'
+typedfunc = 'method' type:typespec interface:IDENT '.' name:IDENT '(' [paramtype:typespec param:IDENT {',' [paramtype:typespec] param:IDENT}] ')'
   {localvar}
-  {STATEMENT | return value:EXPR | OBJECTCALL | OBJECTASSIGNEXPR}
+  {statement | return value:EXPR | OBJECTCALL | OBJECTASSIGNEXPR}
   'end';
-untypedfunc = 'method' interface:IDENT '.' name:IDENT '(' [paramtype:TYPESPEC param:IDENT {',' [paramtype:TYPESPEC] param:IDENT}] ')'
+untypedfunc = 'method' interface:IDENT '.' name:IDENT '(' [paramtype:typespec param:IDENT {',' [paramtype:typespec] param:IDENT}] ')'
   {localvar}
-  {STATEMENT | return | OBJECTCALL | OBJECTASSIGNEXPR}
-  'end';
-
-operator = 'operator' type:TYPESPEC op operand:TYPESPEC {',' operand:TYPESPEC}
-  {localvar}
-  {STATEMENT | OPASSIGNEXPR};
+  {statement | return | OBJECTCALL | OBJECTASSIGNEXPR}
   'end';
 
-unary = 'unary' ((type:TYPESPEC unaryop) | (unaryop type:TYPESPEC))
+operator = 'operator' type:typespec op operand:typespec {',' operand:typespec}
   {localvar}
-  {STATEMENT | UNARYASSIGNEXPR};
+  {statement | OPASSIGNEXPR};
+  'end';
+
+unary = 'unary' ((type:typespec unaryop) | (unaryop type:typespec))
+  {localvar}
+  {statement | UNARYASSIGNEXPR};
   'end';
 
 main = 'run'
   {localvar}
-  {STATEMENT}
+  {statement}
   'end';
