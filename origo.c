@@ -15,11 +15,13 @@
 char* CreateString( const char* value );
 void FreeString( char** stringPtr );
 
+unsigned AppendString( char** destString, const char* value );
+
 /// File Path declarations
 
-int SplitPath( const char* fromFullPath, char** toDir,
+unsigned SplitPath( const char* fromFullPath, char** toDir,
   char** toBaseName, char** toExt );
-int JoinPath( const char* fromDir, const char* fromBaseName,
+unsigned JoinPath( const char* fromDir, const char* fromBaseName,
   const char* fromExt, char** toFullPath );
 
 /// Symbol Table declarations
@@ -115,30 +117,30 @@ void Cleanup() {
 }
 
 void InferFileNames( int argc, char** argv[] ) {
+  unsigned result = 0;
+
   switch( argc ) {
   case 2:
-    if( SplitPath((const char*)argv[1], &grammarPath, &grammarBaseName,
-        &grammarExt) ) {
-      printf( "Internal error\n" );
+    if( result = SplitPath((const char*)argv[1], &grammarPath,
+        &grammarBaseName, &grammarExt) ) {
+      printf( "Internal error: %u\n", result );
       exit(2);
     }
-    if( JoinPath(grammarPath, grammarBaseName, ".exe",
-        &compilerPath) ) {
-      printf( "Internal error\n" );
-      exit(2);
-    }
+
+    compilerPath = CreateString(grammarPath);
+    compilerBaseName = CreateString(grammarBaseName);
     break;
 
   case 3:
-    if( SplitPath((const char*)argv[1], &grammarPath, &grammarBaseName,
-        &grammarExt) ) {
-      printf( "Internal error\n" );
+    if( result = SplitPath((const char*)argv[1], &grammarPath,
+        &grammarBaseName, &grammarExt) ) {
+      printf( "Internal error: %u\n", result );
       exit(2);
     }
 
-    if( SplitPath((const char*)argv[2], &compilerPath, &compilerBaseName,
-        &compilerExt) ) {
-      printf( "Internal error\n" );
+    if( result = SplitPath((const char*)argv[2], &compilerPath,
+        &compilerBaseName, &compilerExt) ) {
+      printf( "Internal error: %u\n", result );
       exit(2);
     }
     break;
@@ -148,22 +150,45 @@ void InferFileNames( int argc, char** argv[] ) {
     exit(2);
   }
 
-  if( JoinPath(grammarPath, compilerBaseName, ".c",
-      &compilerSourceFileName ) ) {
-    printf( "Internal error\n" );
+  if( grammarExt == NULL ) {
+    grammarExt = CreateString(".ocg");
+    if( grammarExt == NULL ) {
+      printf( "Internal error.\n" );
+      exit(2);
+    }
+  }
+
+  if( compilerExt == NULL ) {
+    compilerExt = CreateString(".exe");
+    if( compilerExt == NULL ) {
+      printf( "Internal error.\n" );
+      exit(2);
+    }
+  }
+
+  if( result = JoinPath(grammarPath, grammarBaseName, grammarExt,
+      &grammarFileName) ) {
+    printf( "Internal error: %u\n", result );
     exit(2);
   }
 
-  if( JoinPath(grammarPath, compilerBaseName, ".def",
-      &compilerImportFileName ) ) {
-    printf( "Internal error\n" );
+  if( result = JoinPath(compilerPath, compilerBaseName, ".c",
+      &compilerSourceFileName) ) {
+    printf( "Internal error: %u\n", result );
     exit(2);
   }
 
-printf( "%s\n", grammarFileName );
-printf( "%s\n", compilerSourceFileName );
-printf( "%s\n", compilerImportFileName );
-printf( "%s\n", compilerExeFileName );
+  if( result = JoinPath(compilerPath, compilerBaseName, ".def",
+      &compilerImportFileName) ) {
+    printf( "Internal error: %u\n", result );
+    exit(2);
+  }
+
+  if( result = JoinPath(compilerPath, compilerBaseName, compilerExt,
+      &compilerExeFileName) ) {
+    printf( "Internal error: %s\n", result );
+    exit(2);
+  }
 }
 
 int main( int argc, char** argv ) {
@@ -1384,7 +1409,7 @@ char* CreateString( const char* value ) {
 
   newString = calloc(1, (valueLen + 1) * sizeof(char) );
 
-  if( newString ) {
+  if( value && newString ) {
     strcat( newString, value );
   }
 
@@ -1400,9 +1425,25 @@ void FreeString( char** stringPtr ) {
   }
 }
 
+unsigned AppendString( char** destString, const char* value ) {
+  if( destString == NULL ) { return 1; }
+  if( value == NULL ) { return 2; }
+
+  char* tmpString;
+  size_t newLen = strlen(*destString) + strlen(value) + 1;
+
+  tmpString = realloc(*destString, newLen * sizeof(char));
+  if( tmpString == NULL ) { return 3; }
+
+  strcat( tmpString, value );
+  *destString = tmpString;
+
+  return 0;
+}
+
 /// File Path implementation
 
-int SplitPath( const char* fromFullPath, char** toDir,
+unsigned SplitPath( const char* fromFullPath, char** toDir,
   char** toBaseName, char** toExt ) {
 
   const char* pathCh;
@@ -1418,9 +1459,13 @@ int SplitPath( const char* fromFullPath, char** toDir,
   char* newExt = NULL;
 
   // Validate parameters
+  // fromFullPath must be non-null and non-empty
   if( (fromFullPath == NULL) || (*fromFullPath == '\0') ) { return 1; }
+  // toDir must be non-null, and point to a null pointer
   if( (toDir == NULL) || *toDir ) { return 2; }
+  // toBaseName must be non-null, and point to a null pointer
   if( (toBaseName == NULL) || *toBaseName ) { return 3; }
+  // toExt must be non-null, and point to a null pointer
   if( (toExt == NULL) || *toExt ) { return 4; }
 
   pathDir = fromFullPath;
@@ -1508,7 +1553,7 @@ ExitError:
   return 6;
 }
 
-int JoinPath( const char* fromDir, const char* fromBaseName,
+unsigned JoinPath( const char* fromDir, const char* fromBaseName,
   const char* fromExt, char** toFullPath ) {
 
   char* newPath = NULL;
