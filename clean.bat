@@ -1,4 +1,10 @@
 @echo off
+if "%1" == "origo" goto SkipDeleteOrigo
+if exist %1.c del %1.c
+if exist %1.def del %1.def
+if exist %1.exe del %1.exe
+:SkipDeleteOrigo
+
 if exist cgen.c del cgen.c
 if exist cgen.def del cgen.def
 if exist cgen.exe del cgen.exe

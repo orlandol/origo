@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <ctype.h>
 
 /*
   Declaraytions
@@ -33,6 +34,9 @@ unsigned DeclareNamespace( SymbolTable* symTab, const char* namespace );
 
 /// Parser deckarations
 
+#define NOTHINGTOSKIP 0
+#define SKIPPED 2
+
 typedef struct Parser {
   FILE* handle;
 
@@ -52,6 +56,12 @@ void CloseGrammar( Parser* source );
 void ReleaseGrammar( Parser** sourcePtr );
 
 int ReadChar( Parser* source );
+
+unsigned SkipSpace( Parser* source );
+unsigned SkipCommentsAndSpace( Parser* source );
+
+unsigned MarkParserPosition( Parser* source );
+unsigned RestoreParserPosition( Parser* source );
 
 /// Compiler declarations
 
@@ -76,6 +86,11 @@ int PatchVersion( const char* fileName, const char* copyright,
 /*
   Main program
 */
+
+char* programCopyright = NULL;
+char* programDescription = NULL;
+char* programVersion = NULL;
+char* programVersionStr = NULL;
 
 char* grammarPath = NULL;
 char* grammarBaseName = NULL;
@@ -103,6 +118,11 @@ void ShowUsage() {
 }
 
 void Cleanup() {
+  FreeString( &programCopyright );
+  FreeString( &programDescription );
+  FreeString( &programVersion );
+  FreeString( &programVersionStr );
+
   FreeString( &grammarPath );
   FreeString( &grammarBaseName );
   FreeString( &grammarExt );
@@ -1718,7 +1738,30 @@ int ReadChar( Parser* source ) {
   return EOF;
 }
 
+unsigned SkipSpace( Parser* source ) {
+  if( !(source && source->handle) ) { return 1; }
+
+  if( isspace(source->ch) ) {
+    while( isspace(source->ch) ) {
+      ReadChar( source );
+    }
+    return SKIPPED;
+  }
+
+  return NOTHINGTOSKIP;
+}
+
 unsigned SkipCommentsAndSpace( Parser* source ) {
+  if( !(source && source->handle) ) { return 1; }
+
+  return NOTHINGTOSKIP;
+}
+
+unsigned MarkParserPosition( Parser* source ) {
+  return 0;
+}
+
+unsigned RestoreParserPosition( Parser* source ) {
   return 0;
 }
 
@@ -1795,8 +1838,6 @@ void ReleaseCompiler( Compiler** compilerPtr ) {
 
 int BuildCompiler( const char* sourceFileName,
   const char* exeFileName, const char* importFileName ) {
-
-printf( "{%s}{%s}{%s}\n", sourceFileName, exeFileName, importFileName );
 
   if( !(sourceFileName && (*sourceFileName)) ) { return 0; };
   if( !(exeFileName && (*exeFileName)) ) { return 0; };
