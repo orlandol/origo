@@ -30,7 +30,8 @@ unsigned JoinPath( const char* fromDir, const char* fromBaseName,
 typedef struct SymbolTable {
 } SymbolTable;
 
-unsigned DeclareNamespace( SymbolTable* symTab, const char* namespace );
+unsigned DeclareNamespace( SymbolTable* symbolTable,
+  const char* namespace );
 
 /// Parser deckarations
 
@@ -52,16 +53,20 @@ typedef struct Parser {
 } Parser;
 
 Parser* OpenGrammar( const char* fileName );
-void CloseGrammar( Parser* source );
-void ReleaseGrammar( Parser** sourcePtr );
+void CloseGrammar( Parser* grammar );
+void ReleaseGrammar( Parser** grammarPtr );
 
-int ReadChar( Parser* source );
+int ReadChar( Parser* grammar );
+unsigned ReturnChar( Parser* grammar, int character );
 
-unsigned SkipSpace( Parser* source );
-unsigned SkipCommentsAndSpace( Parser* source );
+unsigned SkipSpace( Parser* grammar );
+unsigned SkipCommentsAndSpace( Parser* grammar );
 
-unsigned MarkParserPosition( Parser* source );
-unsigned RestoreParserPosition( Parser* source );
+unsigned MarkParserPosition( Parser* grammar );
+unsigned RestoreParserPosition( Parser* grammar );
+
+unsigned ParseGrammar( Parser* grammar, SymbolTable* symbolTable,
+  struct Compiler* compiler );
 
 /// Compiler declarations
 
@@ -106,6 +111,7 @@ char* compilerImportFileName = NULL;
 char* compilerExeFileName = NULL;
 
 Parser* parser = NULL;
+SymbolTable* symtab = NULL;
 Compiler* compiler = NULL;
 
 void ShowBanner() {
@@ -137,6 +143,7 @@ void Cleanup() {
   FreeString( &compilerExeFileName );
 
   ReleaseGrammar( &parser );
+//  ReleaseSymbolTable( &symtab );
   ReleaseCompiler( &compiler );
 }
 
@@ -235,6 +242,12 @@ int main( int argc, char** argv ) {
   if( compiler == NULL ) {
     printf( "Error creating compiler '%s' '%s'\n",
       compilerSourceFileName, compilerImportFileName );
+    exit(1);
+  }
+
+  result = ParseGrammar(parser, symtab, compiler);
+  if( result ) {
+    printf( "Internal error: %u\n", result );
     exit(1);
   }
 
@@ -1669,7 +1682,12 @@ unsigned JoinPath( const char* fromDir, const char* fromBaseName,
 
 /// Symbol Table implementation
 
-unsigned DeclareNamespace( SymbolTable* symTab, const char* namespace ) {
+unsigned DeclareNamespace( SymbolTable* symbolTable,
+  const char* namespace ) {
+
+  if( symbolTable == NULL ) { return 1; }
+  if( namespace == NULL ) { return 2; }
+
   return 0;
 }
 
@@ -1699,51 +1717,64 @@ Parser* OpenGrammar( const char* fileName ) {
   return NULL;
 }
 
-void CloseGrammar( Parser* source ) {
-  if( source && source->handle ) {
-    fclose( source->handle );
-    source->handle = NULL;
+void CloseGrammar( Parser* grammar ) {
+  if( grammar && grammar->handle ) {
+    fclose( grammar->handle );
+    grammar->handle = NULL;
   }
 }
 
-void ReleaseGrammar( Parser** sourcePtr ) {
-  if( sourcePtr ) {
-    if( (*sourcePtr) ) {
-      CloseGrammar( (*sourcePtr) );
+void ReleaseGrammar( Parser** grammarPtr ) {
+  if( grammarPtr ) {
+    if( (*grammarPtr) ) {
+      CloseGrammar( (*grammarPtr) );
 
-      free( (*sourcePtr) );
-      (*sourcePtr) = NULL;
+      free( (*grammarPtr) );
+      (*grammarPtr) = NULL;
     }
   }
 }
 
-int ReadChar( Parser* source ) {
-  if( !(source && source->handle) ) { return EOF; }
+int ReadChar( Parser* grammar ) {
+  if( !(grammar && grammar->handle) ) { return EOF; }
 
-  source->ch = fgetc(source->handle);
-  if( source->ch != EOF ) {
-    if( source->ch == '\r' ) {
-      source->ch = fgetc(source->handle);
+  grammar->ch = fgetc(grammar->handle);
+  if( grammar->ch != EOF ) {
+    if( grammar->ch == '\r' ) {
+      grammar->ch = fgetc(grammar->handle);
+      if( grammar->ch != '\n' ) {
+        ungetc( grammar->ch, grammar->handle );
+      }
     }
 
-    source->nextColumn++;
-    if( source->ch == '\n' ) {
-      source->nextLine++;
-      source->nextColumn = 1;
+    if( grammar->ch == '\n' ) {
+      grammar->nextLine++;
+      grammar->nextColumn = 0;
     }
+    grammar->nextColumn++;
 
-    return source->ch;
+    return grammar->ch;
   }
 
   return EOF;
 }
 
-unsigned SkipSpace( Parser* source ) {
-  if( !(source && source->handle) ) { return 1; }
+unsigned ReturnChar( Parser* grammar, int character ) {
+  if( !(grammar && grammar->ch) ) { return 1; }
 
-  if( isspace(source->ch) ) {
-    while( isspace(source->ch) ) {
-      ReadChar( source );
+  if( ungetc(character, grammar->ch) != grammar->ch ) {
+    return 3;
+  }
+
+  return 0;
+}
+
+unsigned SkipSpace( Parser* grammar ) {
+  if( !(grammar && grammar->handle) ) { return 1; }
+
+  if( isspace(grammar->ch) ) {
+    while( isspace(grammar->ch) ) {
+      ReadChar( grammar );
     }
     return SKIPPED;
   }
@@ -1751,18 +1782,53 @@ unsigned SkipSpace( Parser* source ) {
   return NOTHINGTOSKIP;
 }
 
-unsigned SkipCommentsAndSpace( Parser* source ) {
-  if( !(source && source->handle) ) { return 1; }
+unsigned SkipCommentsAndSpace( Parser* grammar ) {
+  unsigned result;
+  unsigned commentLevel = 0;
 
-  return NOTHINGTOSKIP;
+  if( !(grammar && grammar->handle) ) { return 1; }
+
+  while( grammar->ch != EOF ) {
+    result = 0;
+
+    if( isspace(grammar->ch) ) {
+      while( isspace(grammar->ch) ) {
+        ReadChar( grammar );
+      }
+      result |= 1;
+    }
+
+    if( grammar=>ch == '/' ) {
+    }
+  }
+
+  return SKIPPED;
 }
 
-unsigned MarkParserPosition( Parser* source ) {
-  return 0;
+unsigned MarkParserPosition( Parser* grammar ) {
+  if( !(grammar && grammar->handle) ) { return 1; }
+
+  return 2;
 }
 
-unsigned RestoreParserPosition( Parser* source ) {
-  return 0;
+unsigned RestoreParserPosition( Parser* grammar ) {
+  if( !(grammar && grammar->handle) ) { return 1; }
+
+  return 2;
+}
+
+unsigned ParseGrammar( Parser* grammar, SymbolTable* symbolTable,
+  Compiler* compiler ) {
+
+  if( !(grammar && grammar->handle) ) { return 1; }
+//  if( symbolTable == NULL ) { return 2; }
+  if( !(compiler && compiler->sourceHandle &&
+    compiler->importHandle) ) { return 3; }
+
+  SkipCommentsAndSpace( grammar );
+putchar( grammar->ch );
+
+  return 4;
 }
 
 /// Compiler implementation
