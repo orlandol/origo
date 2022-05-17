@@ -46,6 +46,8 @@ typedef struct Parser {
   unsigned line;
   unsigned column;
 
+  int nextch;
+
   unsigned nextLine;
   unsigned nextColumn;
 
@@ -57,7 +59,6 @@ void CloseGrammar( Parser* grammar );
 void ReleaseGrammar( Parser** grammarPtr );
 
 int ReadChar( Parser* grammar );
-unsigned ReturnChar( Parser* grammar, int character );
 
 unsigned SkipSpace( Parser* grammar );
 unsigned SkipCommentsAndSpace( Parser* grammar );
@@ -1703,6 +1704,8 @@ Parser* OpenGrammar( const char* fileName ) {
 
   newParser->handle = fopen(fileName, "r");
   if( newParser->handle ) {
+    ReadChar( newParser );
+
     newParser->line = 1;
     newParser->column = 1;
     newParser->nextLine = 1;
@@ -1738,13 +1741,18 @@ void ReleaseGrammar( Parser** grammarPtr ) {
 int ReadChar( Parser* grammar ) {
   if( !(grammar && grammar->handle) ) { return EOF; }
 
-  grammar->ch = fgetc(grammar->handle);
-  if( grammar->ch != EOF ) {
-    if( grammar->ch == '\r' ) {
-      grammar->ch = fgetc(grammar->handle);
-      if( grammar->ch != '\n' ) {
-        ungetc( grammar->ch, grammar->handle );
+  grammar->ch = grammar->nextch;
+  grammar->line = grammar->nextLine;
+  grammar->column = grammar->nextColumn;
+
+  grammar->nextch = fgetc(grammar->handle);
+  if( grammar->nextch != EOF ) {
+    if( grammar->nextch == '\r' ) {
+      grammar->nextch = fgetc(grammar->handle);
+      if( grammar->nextch != '\n' ) {
+        ungetc( grammar->nextch, grammar->handle );
       }
+      grammar->nextch = '\n';
     }
 
     if( grammar->ch == '\n' ) {
@@ -1757,16 +1765,6 @@ int ReadChar( Parser* grammar ) {
   }
 
   return EOF;
-}
-
-unsigned ReturnChar( Parser* grammar, int character ) {
-  if( !(grammar && grammar->ch) ) { return 1; }
-
-  if( ungetc(character, grammar->ch) != grammar->ch ) {
-    return 3;
-  }
-
-  return 0;
 }
 
 unsigned SkipSpace( Parser* grammar ) {
@@ -1795,10 +1793,66 @@ unsigned SkipCommentsAndSpace( Parser* grammar ) {
       while( isspace(grammar->ch) ) {
         ReadChar( grammar );
       }
+
       result |= 1;
     }
 
-    if( grammar=>ch == '/' ) {
+    if( (grammar->ch == '/') && (grammar->nextch == '/') ) {
+      ReadChar( grammar );
+      ReadChar( grammar );
+
+      while( grammar->ch != EOF ) {
+        if( grammar->ch == '\n' ) {
+          break;
+        }
+
+        ReadChar( grammar );
+      }
+
+      result |= 2;
+    }
+
+    if( (grammar->ch == '/') && (grammar->nextch == '*') ) {
+      ReadChar( grammar );
+      ReadChar( grammar );
+
+      commentLevel = 1;
+
+      while( commentLevel && (grammar->ch != EOF) ) {
+        if( (grammar->ch == '/') && (grammar->nextch == '*') ) {
+          if( commentLevel == ((unsigned)-1) ) {
+            printf( "Error[L%u, C%u]: Maximum nested comment level reached.\n",
+              grammar->line, grammar->column );
+            exit(3);
+          }
+          commentLevel++;
+
+          ReadChar( grammar );
+          ReadChar( grammar );
+          continue;
+        }
+
+        if( (grammar->ch == '*') && (grammar->nextch == '/') ) {
+          if( commentLevel == 0 ) {
+            printf( "Error[L%u, C%u]: Comment level mismatch.\n",
+              grammar->line, grammar->column );
+            exit(3);
+          }
+          commentLevel--;
+
+          ReadChar( grammar );
+          ReadChar( grammar );
+          continue;
+        }
+
+        ReadChar( grammar );
+      }
+
+      result |= 4;
+    }
+
+    if( result == 0 ) {
+      break;
     }
   }
 
@@ -1826,7 +1880,6 @@ unsigned ParseGrammar( Parser* grammar, SymbolTable* symbolTable,
     compiler->importHandle) ) { return 3; }
 
   SkipCommentsAndSpace( grammar );
-putchar( grammar->ch );
 
   return 4;
 }
