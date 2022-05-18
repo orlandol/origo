@@ -66,6 +66,8 @@ unsigned SkipCommentsAndSpace( Parser* grammar );
 unsigned MarkParserPosition( Parser* grammar );
 unsigned RestoreParserPosition( Parser* grammar );
 
+unsigned ReadIdent( Parser* grammar, char** identPtr );
+
 unsigned ParseGrammar( Parser* grammar, SymbolTable* symbolTable,
   struct Compiler* compiler );
 
@@ -85,18 +87,18 @@ void ReleaseCompiler( Compiler** compilerPtr );
 int BuildCompiler( const char* sourcefileName,
   const char* exeFileName, const char* importFileName );
 
-int PatchVersion( const char* fileName, const char* copyright,
-  const char* description, const char* version,
-  const char* versionstr );
+int PatchVersion( const char* fileName,
+  const char* version, const char* versionstr,
+  const char* description, const char* copyright );
 
 /*
   Main program
 */
 
-char* programCopyright = NULL;
-char* programDescription = NULL;
-char* programVersion = NULL;
-char* programVersionStr = NULL;
+char* compilerCopyright = NULL;
+char* compilerDescription = NULL;
+char* compilerVersion = NULL;
+char* compilerVersionStr = NULL;
 
 char* grammarPath = NULL;
 char* grammarBaseName = NULL;
@@ -125,10 +127,10 @@ void ShowUsage() {
 }
 
 void Cleanup() {
-  FreeString( &programCopyright );
-  FreeString( &programDescription );
-  FreeString( &programVersion );
-  FreeString( &programVersionStr );
+  FreeString( &compilerCopyright );
+  FreeString( &compilerDescription );
+  FreeString( &compilerVersion );
+  FreeString( &compilerVersionStr );
 
   FreeString( &grammarPath );
   FreeString( &grammarBaseName );
@@ -258,7 +260,9 @@ int main( int argc, char** argv ) {
   result = BuildCompiler(compilerSourceFileName, compilerExeFileName,
     compilerImportFileName);
 
-  //result = PatchVersion(compilerExeFileName, copyright, version, versionstr);
+  result = PatchVersion(compilerExeFileName,
+    compilerVersion, compilerVersionStr,
+    compilerDescription, compilerCopyright);
 
   Cleanup();
 
@@ -1871,6 +1875,15 @@ unsigned RestoreParserPosition( Parser* grammar ) {
   return 2;
 }
 
+unsigned ReadIdent( Parser* grammar, char** identPtr ) {
+  if( grammar == NULL ) { return 1; }
+  if( !(identPtr && (*identPtr == NULL)) ) { return 2; }
+
+  char identBuffer[32] = {};
+
+  return 3;
+}
+
 unsigned ParseGrammar( Parser* grammar, SymbolTable* symbolTable,
   Compiler* compiler ) {
 
@@ -1881,7 +1894,8 @@ unsigned ParseGrammar( Parser* grammar, SymbolTable* symbolTable,
 
   SkipCommentsAndSpace( grammar );
 
-  return 4;
+//  return 4;
+  return 0;
 }
 
 /// Compiler implementation
@@ -1974,22 +1988,41 @@ int BuildCompiler( const char* sourceFileName,
   return _spawnvp(_P_WAIT, ".\\tools\\tcc\\tcc.exe", tccOptions);
 }
 
-int PatchVersion( const char* fileName, const char* copyright,
-  const char* description, const char* version,
-  const char* versionstr ) {
+int PatchVersion( const char* fileName,
+  const char* version, const char* versionstr,
+  const char* description, const char* copyright ) {
 
-  char* verpOptions[] = {
-    " ",
-    (char*)fileName,
-    "/s copyright",
-    (char*)copyright,
-    "/s desc",
-    (char*)description,
-    "/va",
-    (char*)version,
-    "/pv",
-    (char*)version,
+  char* verpatchOptions[] = {
+    /* [0] */ " ",
+    /* [1] */ (char*)fileName,
+    /* [2] */ "/va ",
+    /* [3] */ "0.0.0.0", // version
+    /* [4] */ " /pv ",
+    /* [5] */ "0.0.0.0", // versionstr
+    /* [6] */ " /s desc \"",
+    /* [7] */ "", // description
+    /* [8] */ "\" /s copyright \"",
+    /* [9] */ "", // copyright
+    /* [10] */ "\"",
     NULL
   };
-  return _spawnvp(_P_WAIT, ".\\tools\\verpatch\\verpatch.exe", verpOptions);
+
+  if( copyright ) {
+    verpatchOptions[9] = (char*)copyright;
+  }
+
+  if( description ) {
+    verpatchOptions[7] = (char*)description;
+  }
+
+  if( version ) {
+    verpatchOptions[3] = (char*)version;
+  }
+
+  if( versionstr ) {
+    verpatchOptions[5] = (char*)versionstr;
+  }
+
+  return _spawnvp(_P_WAIT,
+    ".\\tools\\verpatch\\verpatch.exe", verpatchOptions);
 }
