@@ -30,6 +30,9 @@ unsigned JoinPath( const char* fromDir, const char* fromBaseName,
 typedef struct SymbolTable {
 } SymbolTable;
 
+SymbolTable* CreateSymbolTable();
+void ReleaseSymbolTable( SymbolTable** symbolTablePtr );
+
 unsigned DeclareNamespace( SymbolTable* symbolTable,
   const char* namespace );
 
@@ -117,6 +120,8 @@ Parser* parser = NULL;
 SymbolTable* symtab = NULL;
 Compiler* compiler = NULL;
 
+char* ident = NULL;
+
 void ShowBanner() {
   printf( "Origo compiler generator v%u.%u %s\n"
     "Copyright 2022 Orlando Llanes\n\n", 0, 1, "Alpha" );
@@ -146,8 +151,10 @@ void Cleanup() {
   FreeString( &compilerExeFileName );
 
   ReleaseGrammar( &parser );
-//  ReleaseSymbolTable( &symtab );
+  ReleaseSymbolTable( &symtab );
   ReleaseCompiler( &compiler );
+
+  FreeString( &ident );
 }
 
 void InferFileNames( int argc, char** argv[] ) {
@@ -1477,10 +1484,16 @@ unsigned AppendString( char** destString, const char* value ) {
   if( value == NULL ) { return 2; }
 
   char* tmpString;
-  size_t newLen = strlen(*destString) + strlen(value) + 1;
 
-  tmpString = realloc(*destString, newLen * sizeof(char));
-  if( tmpString == NULL ) { return 3; }
+  size_t newLen = strlen(value);
+  if( *destString == NULL ) {
+    tmpString = calloc(1, (newLen + 1) * sizeof(char) );
+    if( tmpString == NULL ) { return 3; }
+  } else {
+    newLen += strlen(*destString);
+    tmpString = realloc(*destString, (newLen + 1) * sizeof(char));
+    if( tmpString == NULL ) { return 4; }
+  }
 
   strcat( tmpString, value );
   *destString = tmpString;
@@ -1687,6 +1700,15 @@ unsigned JoinPath( const char* fromDir, const char* fromBaseName,
 
 /// Symbol Table implementation
 
+SymbolTable* CreateSymbolTable() {
+  SymbolTable* newSymbolTable = NULL;
+
+  return NULL;
+}
+
+void ReleaseSymbolTable( SymbolTable** symbolTablePtr ) {
+}
+
 unsigned DeclareNamespace( SymbolTable* symbolTable,
   const char* namespace ) {
 
@@ -1879,7 +1901,42 @@ unsigned ReadIdent( Parser* grammar, char** identPtr ) {
   if( grammar == NULL ) { return 1; }
   if( !(identPtr && (*identPtr == NULL)) ) { return 2; }
 
+  char* newIdent = NULL;
   char identBuffer[32] = {};
+  unsigned ibIndex = 0;
+  unsigned result = 0;
+
+  if( (grammar->ch == '_') || isalpha(grammar->ch) ) {
+    while( (grammar->ch == '_') || isalnum(grammar->ch) ) {
+      if( ibIndex == 31 ) {
+        result = AppendString(&newIdent, identBuffer);
+        if( result ) {
+          printf( "Internal error: ReadIdent[%u]\n", result );
+          exit(4);
+        }
+        identBuffer[0] = '\0';
+        ibIndex = 0;
+      }
+
+      identBuffer[ibIndex] = grammar->ch;
+      identBuffer[ibIndex + 1] = '\0';
+      ibIndex++;
+
+      ReadChar( grammar );
+    }
+    if( ibIndex ) {
+      result = AppendString(&newIdent, identBuffer);
+      if( result ) {
+        printf( "Internal error: ReadIdent[%u]\n", result );
+        exit(4);
+      }
+    }
+
+    *identPtr = newIdent;
+    return 0;
+  }
+
+  FreeString( &newIdent );
 
   return 3;
 }
@@ -1887,12 +1944,19 @@ unsigned ReadIdent( Parser* grammar, char** identPtr ) {
 unsigned ParseGrammar( Parser* grammar, SymbolTable* symbolTable,
   Compiler* compiler ) {
 
+  unsigned result;
+
   if( !(grammar && grammar->handle) ) { return 1; }
 //  if( symbolTable == NULL ) { return 2; }
   if( !(compiler && compiler->sourceHandle &&
     compiler->importHandle) ) { return 3; }
 
   SkipCommentsAndSpace( grammar );
+  result = ReadIdent(grammar, &ident);
+  if( result ) {
+    printf( "Error reading identifier: %u\n", result );
+    exit(3);
+  }
 
 //  return 4;
   return 0;
