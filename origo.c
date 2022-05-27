@@ -128,7 +128,10 @@ void ShowBanner() {
 }
 
 void ShowUsage() {
-  printf( "\nUsage: origo infile[.ocg] [outfile.exe]\n" );
+  printf(
+    "Usage:\n"
+    "origo -new outfile[.ocg]\n"
+    "origo infile[.ocg] [outfile[.exe]]\n" );
 }
 
 void Cleanup() {
@@ -232,6 +235,116 @@ void InferFileNames( int argc, char** argv[] ) {
   }
 }
 
+static const char* genGrammarText = {
+  "\n"
+  "/*\n"
+  " * Begin Optional overrides - Uncomment // to change.\n"
+  " */\n"
+  "\n"
+  "/* Written to the executable, and shown on invocation. */\n"
+  "// copyright = \"(C) YEAR NAME/ORGANIZATION\";\n"
+  "\n"
+  "/* Written to the executable */\n"
+  "// description = \"XYZ compiler\";\n"
+  "\n"
+  "/* Written to the executable */\n"
+  "// version = \"x.x.x.x\";\n"
+  "\n"
+  "/* Written to the executable, and shown on invocation. */\n"
+  "// versionstr = \"x.x.x.x STAGE\"\n"
+  "\n"
+  "/* Changes default identifier definition */\n"
+  "// ident = _a/zA/Z{_a/zA/Z0/9};\n"
+  "\n"
+  "/*\n"
+  " * End optional overrides.\n"
+  " */\n"
+  "\n"
+  "/*\n"
+  " * Parse rule reference:\n"
+/// TODO: Add pre-defined tag reference
+  " */\n"
+  "\n"
+  "/*\n"
+  " * Begin pre-defined parser starting point (required).\n"
+  " */\n"
+  "parse = /* RULE */;\n"
+  "\n"
+  "/*\n"
+  " * End pre-defined parser starting point.\n"
+  " */\n"
+  "\n"
+  "/* Custom parsing rules. */\n"
+  "// RULENAME = RULE;\n"
+  "\n"
+};
+
+
+void ParseOptions( int argc, char** argv ) {
+  char* genGrammarPath = NULL;
+  char* genGrammarBaseName = NULL;
+  char* genGrammarExt = NULL;
+  char* genGrammarFileName = NULL;
+  FILE* genGrammarFile = NULL;
+
+  /// TODO: Move new file generation to its own function
+  switch( argc ) {
+  case 2:
+    if( strcmp(argv[1], "-new") == 0 ) {
+      ShowUsage();
+    }
+    exit(3);
+
+  case 3:
+    if( argv && argv[1] && (strcmp(argv[1], "-new") == 0) ) {
+      if( argv[2] == NULL ) {
+        printf( "Internal error.\n" );
+        exit(3);
+      }
+
+      if( SplitPath(argv[2],
+          &genGrammarPath, &genGrammarBaseName, &genGrammarExt) == 0 ) {
+
+        if( genGrammarExt == NULL ) {
+          genGrammarExt = CreateString(".ocg");
+        }
+
+        JoinPath(genGrammarPath, genGrammarBaseName, genGrammarExt,
+          &genGrammarFileName);
+
+        FreeString( &grammarPath );
+        FreeString( &grammarBaseName );
+        FreeString( &grammarExt );
+
+        if( genGrammarFileName == NULL ) {
+          printf( "Internal error.\n" );
+          exit(3);
+        }
+
+        genGrammarFile = fopen(genGrammarFileName, "w");
+        if( genGrammarFile == NULL ) {
+          printf( "Error generating new grammar file '%s'\n", genGrammarFileName );
+          FreeString( &genGrammarFileName);
+          exit(3);
+        }
+
+        FreeString( &genGrammarFileName);
+
+        fprintf( genGrammarFile, "%s", genGrammarText );
+
+        fclose( genGrammarFile );
+        genGrammarFile = NULL;
+
+        exit(0);
+      }
+    }
+    printf( "Internal error\n" );
+    exit(3);
+  }
+
+  InferFileNames( argc, argv );
+}
+
 int main( int argc, char** argv ) {
   int result = 0;
 
@@ -239,7 +352,7 @@ int main( int argc, char** argv ) {
 
   ShowBanner();
 
-  InferFileNames( argc, argv );
+  ParseOptions( argc, argv );
 
   parser = OpenGrammar(grammarFileName);
   if( parser == NULL ) {
