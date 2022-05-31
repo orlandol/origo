@@ -28,7 +28,7 @@
 #  define AVL_INLINE inline __attribute__((always_inline))
 #else
 #  define AVL_INLINE inline
-#  warning "AVL tree functions may not be inlined as intended"
+//#  warning "AVL tree functions may not be inlined as intended"
 #endif
 
 /* Node in an AVL tree.  Embed this in some other data structure.  */

@@ -5,7 +5,23 @@
 
 #include "avl_tree.h"
 
+#define ENUMREF(NODE) avl_tree_entry(NODE, EnumField, node)
+#define STRUCTREF(NODE) avl_tree_entry(NODE, StructField, node)
+#define UNIONREF(NODE) avl_tree_entry(NODE, UnionField, node)
+
 #define SYMBOLREF(NODE) avl_tree_entry(NODE, Symbol, node)
+
+enum PointerType {
+  ptrNone,
+  ptrData,
+  ptrRef
+};
+
+enum BaseType {
+  baseChar,
+  baseInt,
+  baseUint
+};
 
 enum SymbolType {
   symUndefined,
@@ -13,12 +29,85 @@ enum SymbolType {
   symCopyright,
   symDescription,
   symVersion,
-  symVersionString
+  symVersionString,
+  symEnumOpened,
+  symEnumClosed,
+  symStructOpened,
+  symStructClosed,
+  symUnionOpened,
+  symUnionClosed
 };
+
+typedef struct TypeSpec {
+  unsigned pointerType; // Use with PointerType enum
+
+  unsigned baseType; // Use with BaseType enum
+
+  unsigned decBitSize;
+
+  unsigned count;
+  int minRange;
+  int maxRange;
+} TypeSpec;
+
+typedef struct EnumField {
+  char* fieldName;
+  unsigned fieldValue;
+
+  struct avl_tree_node node;
+} EnumField;
+
+typedef struct EnumTable {
+  EnumField* root;
+} EnumTable;
+
+EnumField* CreateEnumField( const char* name, unsigned value );
+
+EnumTable* CreateEnumTable();
+void ReleaseEnumTable( EnumTable** enumTablePtr );
+
+typedef struct StructField {
+  char* fieldName;
+  unsigned fieldType;
+
+  struct avl_tree_node node;
+} StructField;
+
+typedef struct StructTable {
+  StructField* root;
+} StructTable;
+
+typedef struct UnionField {
+  char* fieldName;
+  TypeSpec fieldType;
+
+  struct avl_tree_node node;
+} UnionField;
+
+typedef struct UnionTable {
+  UnionField* root;
+} UnionTable;
+
+typedef struct FuncParam {
+  char* paramName;
+  TypeSpec paramType;
+} FuncParam;
+
+typedef struct FuncParamTable {
+  FuncParam* root;
+} FuncParamTable;
 
 typedef struct Symbol {
   char* name;
-  unsigned symtype; // Used with SymbolType enum
+
+  unsigned symtype; // Use with SymbolType enum
+
+  union {
+    EnumTable* enumTable;
+    StructTable* structTable;
+    UnionTable* unionTable;
+    FuncParamTable* paramTable;
+  } symdata;
 
   struct avl_tree_node node;
 } Symbol;
@@ -37,6 +126,10 @@ static int CompareSymbols( const struct avl_tree_node* left,
   const struct avl_tree_node* right );
 
 unsigned DeclareNamespace( SymbolTable* symbolTable, const char* name );
+
+unsigned DeclareEnum( SymbolTable* symbolTable, const char* name, EnumTable** enumTable );
+unsigned DeclareEnumField( EnumTable* enumTable, const char* fieldName, unsigned value );
+unsigned CloseEnum( SymbolTable* symbolTable, const char* name );
 
 SymbolTable* symtab = NULL;
 
@@ -60,6 +153,9 @@ int main( int argc, char** argv ) {
   symtab = CreateSymbolTable();
 
   DeclareNamespace( symtab, "myprog" );
+
+EnumTable* enumTable = NULL;
+DeclareEnum( symtab, "FileRead", &enumTable );
 
   DumpTree( symtab );
 
@@ -96,6 +192,13 @@ Symbol* CreateSymbol( const char* symbolName, unsigned symbolType ) {
 void FreeSymbol( Symbol** symbolPtr ) {
   if( symbolPtr ) {
     if( (*symbolPtr) ) {
+      switch( (*symbolPtr)->symtype ) {
+      case symEnumOpened:
+      case symEnumClosed:
+        FreeEnumTable( &(*symbolPtr)->enumTable );
+        break;
+      }
+
       if( (*symbolPtr)->name ) {
         free( (*symbolPtr)->name );
         (*symbolPtr)->name = NULL;
@@ -141,16 +244,56 @@ unsigned DeclareNamespace( SymbolTable* symbolTable, const char* name ) {
   if( symbolTable == NULL ) { return 1; }
   if( !(name && *name) ) { return 2; }
 
-  Symbol* newNode = CreateSymbol(name, symNamespace);
-  if( newNode == NULL ) { return 3; }
+  Symbol* newSymbol = CreateSymbol(name, symNamespace);
+  if( newSymbol == NULL ) { return 3; }
 
-  if( avl_tree_insert(&symbolTable->root, &newNode->node,
+  if( avl_tree_insert(&symbolTable->root, &newSymbol->node,
       CompareSymbols) == NULL ) {
+
     return 0;
   }
 
-  FreeSymbol( &newNode );
+  FreeSymbol( &newSymbol );
 
   return 3;
 }
 
+unsigned DeclareEnum( SymbolTable* symbolTable, const char* name,
+  EnumTable** enumTable ) {
+
+  EnumTable* newEnumTable = NULL;
+
+  if( symbolTable == NULL ) { return 1; }
+  if( !(name && (*name)) ) { return 2; }
+  if( (enumTable == NULL) || (*enumTable) ) { return 3; }
+
+  Symbol* newSymbol = CreateSymbol(name, symEnumOpened);
+  if( newSymbol == NULL ) { return 3; }
+
+if( newSymbol->symtype == symEnumOpened ) { printf( "sysEnumOpened\n" ); }
+
+
+  if( avl_tree_insert(&symbolTable->root, &newSymbol->node,
+      CompareSymbols) == NULL ) {
+    newEnumTable = calloc(1, sizeof(EnumTable));
+    if( newEnumTable ) {
+      newSymbol->symdata.enumTable = newEnumTable;
+      *enumTable = newEnumTable;
+      return 0;
+    }
+  }
+
+  FreeSymbol( &newSymbol );
+
+  return 4;
+}
+
+unsigned DeclareEnumField( EnumTable* enumTable, const char* fieldName,
+  unsigned value ) {
+
+  return 4;
+}
+
+unsigned CloseEnum( SymbolTable* symbolTable, const char* name ) {
+  return 2;
+}
