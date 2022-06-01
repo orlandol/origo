@@ -62,6 +62,7 @@ typedef struct EnumTable {
 } EnumTable;
 
 EnumField* CreateEnumField( const char* name, unsigned value );
+void FreeEnumField( EnumField** enumfieldPtr );
 
 EnumTable* CreateEnumTable();
 void ReleaseEnumTable( EnumTable** enumTablePtr );
@@ -166,6 +167,20 @@ DeclareEnum( symtab, "FileRead", &enumTable );
 
 #include "avl_tree.c"
 
+EnumField* CreateEnumField( const char* name, unsigned value ) {
+  return NULL;
+}
+
+void FreeEnumField( EnumField** enumfieldPtr ) {
+}
+
+EnumTable* CreateEnumTable() {
+  return NULL;
+}
+
+void ReleaseEnumTable( EnumTable** enumTablePtr ) {
+}
+
 Symbol* CreateSymbol( const char* symbolName, unsigned symbolType ) {
   Symbol* newSymbol = NULL;
 
@@ -195,7 +210,7 @@ void FreeSymbol( Symbol** symbolPtr ) {
       switch( (*symbolPtr)->symtype ) {
       case symEnumOpened:
       case symEnumClosed:
-        FreeEnumTable( &(*symbolPtr)->enumTable );
+        ReleaseEnumTable( &SYMBOLREF((*symbolPtr))->symdata.enumTable );
         break;
       }
 
