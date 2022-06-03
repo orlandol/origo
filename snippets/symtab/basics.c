@@ -11,21 +11,27 @@ enum SymbolType {
   symCopyright = 1234
 };
 
-typedef struct SymbolTable {
+typedef struct Symbol {
   unsigned symtype;
 
   struct avl_tree_node node;
-} SymbolTable, Symbol;
+} Symbol;
+
+typedef struct SymbolTable {
+  Symbol* root;
+} SymbolTable;
 
 #define SYMBOLREF(nodeVar) avl_tree_entry(nodeVar, Symbol, node)
 
 int CompareSymbols( const struct avl_tree_node* node1,
   const struct avl_tree_node* node2 );
 
-void Insert( SymbolTable** symbolTable, unsigned symbolType );
+void Insert( SymbolTable* symbolTable, unsigned symbolType );
+
+Symbol* Lookup( SymbolTable* symbolTable, unsigned symbolType );
 
 /// Main program ///
-SymbolTable* symtab = NULL;
+SymbolTable symtab;
 
 void Cleanup() {
   printf( "Cleaning up...\n" );
@@ -34,7 +40,7 @@ void Cleanup() {
 void DumpSymbolTable( SymbolTable* symbolTable ) {
   Symbol* symbol = symbolTable;
 
-  avl_tree_for_each_in_postorder(symbol, symbolTable, Symbol, node) {
+  avl_tree_for_each_in_postorder(symbol, symbolTable->root, Symbol, node) {
     printf( "Symbol[%u]\n", symbol->symtype );
   }
 }
@@ -44,10 +50,17 @@ int main( int argc, char** argv ) {
 
   printf( "Running basics program...\n" );
 
+  DumpSymbolTable( &symtab );
+
   Insert( &symtab, symNamespace );
   Insert( &symtab, symCopyright );
 
-  DumpSymbolTable( symtab );
+Symbol* symbol = Lookup(&symtab, symCopyright);
+if( symbol ) {
+  printf( "Lookup(%u) == %u\n", symCopyright, symbol->symtype );
+}
+
+  DumpSymbolTable( &symtab );
 
   return 0;
 }
@@ -69,7 +82,7 @@ int CompareSymbols( const struct avl_tree_node* node1,
   return 1;
 }
 
-void Insert( SymbolTable** symbolTable, unsigned symbolType ) {
+void Insert( SymbolTable* symbolTable, unsigned symbolType ) {
   Symbol* newNode = calloc(1, sizeof(Symbol));
 
   if( newNode == NULL ) {
@@ -79,7 +92,7 @@ void Insert( SymbolTable** symbolTable, unsigned symbolType ) {
 
   newNode->symtype = symbolType;
 
-  if( avl_tree_insert(symbolTable, &newNode->node, CompareSymbols) != NULL ) {
+  if( avl_tree_insert(&symbolTable->root, &newNode->node, CompareSymbols) != NULL ) {
     free( newNode );
     newNode = NULL;
 
@@ -88,4 +101,14 @@ void Insert( SymbolTable** symbolTable, unsigned symbolType ) {
   }
   
   printf( "Insert() succeeded[%u]\n", newNode->symtype );
+}
+
+Symbol* Lookup( SymbolTable* symbolTable, unsigned symbolType ) {
+  Symbol searchSymbol = { .symtype = symbolType };
+
+  if( !(symbolTable && symbolTable->root) ) { return NULL; }
+  if( symbolType == 0 ) { return NULL; }
+
+  return SYMBOLREF(avl_tree_lookup_node(symbolTable->root,
+      &searchSymbol.node, CompareSymbols));
 }

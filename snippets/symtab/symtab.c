@@ -419,10 +419,15 @@ unsigned DeclareEnumField( EnumTable* enumTable, const char* fieldName,
 }
 
 unsigned CloseEnum( SymbolTable* symbolTable, const char* name ) {
+  Symbol* symbol = NULL;
+
   if( symbolTable == NULL ) { return 1; }
   if( !(name && (*name)) ) { return 2; }
 
   /// TODO: Look up enum symbol, validate, and fail if tableOpen is 0
+
+  symbol = SYMBOLREF(avl_tree_lookup_node(symbolTable->root, 
+      name, CompareSymbols));
 
   return 3;
 }
