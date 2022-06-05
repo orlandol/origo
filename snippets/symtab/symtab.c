@@ -384,13 +384,23 @@ unsigned DeclareEnum( SymbolTable* symbolTable, const char* name,
   return 4;
 }
 
-static int CompareEnumFields( const struct avl_tree_node* left,
+static int CompareEnumFieldNodes( const struct avl_tree_node* left,
   const struct avl_tree_node* right ) {
 
   if( (left && ENUMFIELDREF(left)->name) &&
     (right && ENUMFIELDREF(right)->name) ) {
 
     return strcmp(ENUMFIELDREF(left)->name, ENUMFIELDREF(right)->name);
+  }
+
+  return -1;
+}
+
+static int CompareEnumFieldNameToNode( const void* name,
+  const struct avl_tree_node* right ) {
+
+  if( name && (right && ENUMFIELDREF(right)->name) ) {
+    return strcmp(name, ENUMFIELDREF(right)->name);
   }
 
   return -1;
@@ -408,7 +418,7 @@ unsigned DeclareEnumField( EnumTable* enumTable, const char* fieldName,
   if( newEnumField == NULL ) { return 4; }
 
   if( avl_tree_insert(&enumTable->root, &newEnumField->node,
-      CompareEnumFields) == NULL ) {
+      CompareEnumFieldNodes) == NULL ) {
 
     return 0;
   }
@@ -426,8 +436,15 @@ unsigned CloseEnum( SymbolTable* symbolTable, const char* name ) {
 
   /// TODO: Look up enum symbol, validate, and fail if tableOpen is 0
 
-  symbol = SYMBOLREF(avl_tree_lookup_node(symbolTable->root, 
-      name, CompareSymbols));
+  symbol = SYMBOLREF(avl_tree_lookup(symbolTable->root, name,
+    CompareEnumFieldNameToNode));
 
-  return 3;
+  if( !(symbol && (symbol->symtype == symEnum)) ) { return 3; }
+
+  if( !(symbol->symdata.enumTable &&
+      (symbol->symdata.enumTable->tableOpen == 0)) ) { return 5; }
+
+  symbol->symdata.enumTable->tableOpen = 1;
+
+  return 0;
 }
