@@ -32,7 +32,18 @@ enum SymbolType {
   symVersionString,
   symEnum,
   symStruct,
-  symUnion
+  symUnion,
+  symTypeDecl,
+  symConst,
+  symImport,
+  symFuncDecl,
+  symObject,
+  symCtorDecl,
+  symDtorDecl,
+  symInterface,
+  symMethodDecl,
+  symOperatorDecl,
+  symMain
 };
 
 typedef struct TypeSpec {
@@ -135,11 +146,25 @@ unsigned CloseEnum( SymbolTable* symbolTable, const char* name );
 
 SymbolTable* symtab = NULL;
 
-void DumpTree( SymbolTable* symbolTable ) {
+void DumpEnumTable( EnumTable* enumTable ) {
+  EnumField* field = NULL;
+
+  if( !(enumTable && enumTable->root) ) {
+    printf( "DumpEnumTable: Tree empty\n" );
+    exit(5);
+  }
+
+  avl_tree_for_each_in_postorder(field, enumTable->root,
+      EnumField, node) {
+    printf( "  EnumField[%s] == %u\n", field->name, field->value );
+  }
+}
+
+void DumpSymbolTable( SymbolTable* symbolTable ) {
   Symbol* symbol = NULL;
 
   if( !(symbolTable && symbolTable->root) ) {
-    printf( "DumpTree: Tree empty\n" );
+    printf( "DumpSymbolTable: Tree empty\n" );
     exit(3);
   }
 
@@ -169,6 +194,7 @@ void DumpTree( SymbolTable* symbolTable ) {
 
     case symEnum:
       printf( "Enum[%s]\n", symbol->name );
+      DumpEnumTable( symbol->symdata.enumTable );
       break;
 
     case symStruct:
@@ -193,10 +219,12 @@ int main( int argc, char** argv ) {
 
   DeclareNamespace( symtab, "myprog" );
 
-EnumTable* enumTable = NULL;
-DeclareEnum( symtab, "FileRead", &enumTable );
+EnumTable* enumtab = NULL;
+DeclareEnum( symtab, "FileRead", &enumtab );
+DeclareEnumField( enumtab, "Read", 1 );
+DeclareEnumField( enumtab, "Write", 2 );
 
-  DumpTree( symtab );
+  DumpSymbolTable( symtab );
 
   ReleaseSymbolTable( &symtab );
 
@@ -433,8 +461,6 @@ unsigned CloseEnum( SymbolTable* symbolTable, const char* name ) {
 
   if( symbolTable == NULL ) { return 1; }
   if( !(name && (*name)) ) { return 2; }
-
-  /// TODO: Look up enum symbol, validate, and fail if tableOpen is 0
 
   symbol = SYMBOLREF(avl_tree_lookup(symbolTable->root, name,
     CompareEnumFieldNameToNode));
