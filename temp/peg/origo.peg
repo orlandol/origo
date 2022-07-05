@@ -28,9 +28,7 @@ grammar <-
   _ enum /
   _ eof
 
-parse <- p:'parse' _ '=' _ 'eof' _ ';' {
-  printf( "void Parse() { %s } \n", p );
-}
+parse <- 'parse' _ '=' _ 'eof' _ ';'
 
 _ <- (' ' / [\r] / [\n] / [\r\n] / [\t])*
 eof <- !.
