@@ -1,0 +1,111 @@
+
+=========== language ================
+
+// Single line comments
+
+/* Multi-line
+   comments */
+
+/* Multi-line /* nested */
+   comments */
+
+program IDENT
+
+const TYPESPEC IDENT = CONSTEXPR
+
+type TYPESPEC IDENT
+
+union IDENT
+  {TYPESPEC IDENT {, IDENT}}
+end
+
+struct IDENT
+  {TYPESPEC IDENT {, IDENT}}
+end
+
+var
+  {TYPESPEC IDENT {, IDENT}}
+end
+
+import FUNCSPEC IDENT '(' {TYPESPEC IDENT} ')'
+  from FILENAME [as IDENT]
+
+funcdecl FUNCSPEC IDENT '(' {TYPESPEC IDENT} ')'
+
+func [FUNCSPEC] IDENT '(' {TYPESPEC IDENT} ')'
+  {var
+    {TYPESPEC IDENT {, IDENT}}
+  end}
+
+  {STATEMENT | return [EXPR]}
+end
+
+run
+  {var
+    {TYPESPEC IDENT {, IDENT}}
+  end}
+
+  {STATEMENT}
+end
+
+========== statements ===============
+
+IDENT:
+
+goto IDENT
+
+exit '(' EXPR ')'
+
+if CONDITION then STATEMENT
+
+if CONDITION
+  {STATEMENT}
+elseif CONDITION
+  {STATEMENT}
+else
+  {STATEMENT}
+endif
+
+[IDENT:]for IDENT = EXPR (to | downto) EXPR
+  {STATEMENT |
+  break [IDENT] |
+  next [IDENT]}
+endfor
+
+[IDENT:]foreach IDENT in '[' [EXPR {, EXPR}] ']'
+  {STATEMENT |
+  break [IDENT] |
+  next [IDENT]}
+endfor
+
+[IDENT:]repeat
+  {STATEMENT |
+  break [IDENT] |
+  next [IDENT]}
+when CONDITION
+
+[IDENT:]while CONDITION
+  {STATEMENT |
+  break [IDENT] |
+  next [IDENT]}
+endwhile
+
+============ tokens =================
+
+IDENT = _a/zA/Z{_a/zA/Z0/9}
+
+STRING = '..' | ".."
+
+BASETYPE = int[:bits] | uint[:bits] |
+  char | string | bool |
+  file | ufsize | usize
+
+CALLSPEC = cdecl | stdcall
+
+SIMPLETYPE = [@] (TYPENAME | BASETYPE) ['[' CONSTEXPR ']']
+
+FUNCSPEC = { [CALLSPEC] | [SIMPLETYPE] }
+
+TYPESPEC =
+  SIMPLETYPE |
+  func {[CALLSPEC] | [SIMPLETYPE]} '('{TYPESPEC IDENT} ')'
