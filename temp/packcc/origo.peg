@@ -2,9 +2,12 @@
 }
 
 %header {
+  typedef struct Source {
+    FILE* handle;
+  } Source;
 }
 
-%auxil "FILE* "
+%auxil "Source* "
 
 %source {
   // begin strnlen copied from packcc.c source file, as a workaround for TinyCC
@@ -19,43 +22,115 @@
   // end strnlen
 
   /// Begin PCC_GETCHAR override
-  #define PCC_GETCHAR(auxil) (auxil ? fgetc(auxil) : EOF)
+  #define PCC_GETCHAR(auxil) (auxil ? fgetc(auxil->handle) : EOF)
   // End PCC_GETCHAR override
 }
 
-grammar <-
-  _ parse /
-  _ enum /
-  _ eof
+program <-
+  _ 'program' _ <IDENT> (_ toplevel)* _ run (_ toplevel)* _ eof {
+    /// TODO: Declare root namespace as IDENT
+  }
 
-parse <- 'parse' _ '=' _ 'eof' _ ';'
+toplevel <-
+  enum_declaration
 
+enum_declaration <-
+  enum_header (_ enum_field?)* _ 'end' {
+    /// TODO: Write C declaration from Enum table
+  }
+
+enum_header <-
+  'enum' _ <IDENT> {
+    printf( "#error Enum declaration pending implementation\n\n" ); // Temporary
+    /// TODO: Create Enum table
+  }
+
+enum_field <-
+  &'end'
+/ ',' _ <IDENT> {
+    /// TODO: Push field
+    /// TODO: Set current value
+  }
+/ <IDENT> {
+    /// TODO: Clear field stack
+    /// TODO: Push field
+    /// TODO: Declare field with current value
+    /// TODO: Increment current value
+  }
+/ '=' _ CONSTEXPR {
+    /// TODO: Pop each field on the field stack and set value
+  }
+
+run <-
+  run_header (_ STATEMENT)* _ 'end' {
+    printf(
+      "\n"
+      "  return 0;\n"
+      "}\n"
+    );
+  }
+
+run_header <-
+  'run' {
+    printf( "int main( int argc, char** argv ) {\n" );
+  }
+
+CONSTEXPR <- CONSTVAL
+
+CONSTVAL <-
+  [0-9]+
+/ <IDENT> {
+    /// TODO: Lookup IDENT value
+  }
+
+STATEMENT <-
+  label_declaration
+/ goto_statement
+#/ QUALIFIEDIDENT # Temporary
+
+label_declaration <-
+  <IDENT> _ ':' {
+    printf( "%s:\n", $1 );
+  }
+
+goto_statement <-
+  'goto' _ <IDENT> {
+    printf( "  goto %s;\n", $1 );
+  }
+
+#QUALIFIEDIDENT <-
+#  <IDENT> {
+#  }
+#/ '.' <IDENT> {
+#  }
+
+IDENT <- [_a-zA-Z][_a-zA-Z0-9]*
 _ <- (' ' / [\r] / [\n] / [\r\n] / [\t])*
 eof <- !.
 
 %%
 
-FILE* grammar = NULL;
+Source source = {};
 
 int main( int argc, char* argv[] ) {
   if( argc != 2 ) {
     exit(1);
   }
 
-  grammar = fopen(argv[1], "r");
-  if( grammar == NULL ) {
+  source.handle = fopen(argv[1], "r");
+  if( source.handle == NULL ) {
     exit(1);
   }
 
-  pcc_context_t *ctx = pcc_create(grammar);
+  pcc_context_t *ctx = pcc_create(&source);
 
   while( pcc_parse(ctx, NULL) ) {
   };
 
   pcc_destroy( ctx );
 
-  fclose( grammar );
-  grammar = NULL;
+  fclose( source.handle );
+  source.handle = NULL;
 
   return 0;
 }
