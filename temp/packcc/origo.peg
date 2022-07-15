@@ -2,12 +2,17 @@
 }
 
 %header {
-  typedef struct Source {
+  #include "avl_tree.h" /// TODO: Insert avl_tree.h contents here
+
+  #include "symtab.h" /// TODO: Insert symtab.h contents here
+
+  typedef struct Parser {
     FILE* handle;
-  } Source;
+    SymbolTable* symtab;
+  } Parser;
 }
 
-%auxil "Source* "
+%auxil "Parser*"
 
 %source {
   // begin strnlen copied from packcc.c source file, as a workaround for TinyCC
@@ -24,6 +29,10 @@
   /// Begin PCC_GETCHAR override
   #define PCC_GETCHAR(auxil) (auxil ? fgetc(auxil->handle) : EOF)
   // End PCC_GETCHAR override
+
+  #include "avl_tree.c" /// TODO: Insert avl_tree.c contents here
+
+  #include "symtab.c" /// TODO: Insert symtab.c contents here
 }
 
 program <-
@@ -110,27 +119,27 @@ eof <- !.
 
 %%
 
-Source source = {};
+Parser parser = {};
 
 int main( int argc, char* argv[] ) {
   if( argc != 2 ) {
     exit(1);
   }
 
-  source.handle = fopen(argv[1], "r");
-  if( source.handle == NULL ) {
+  parser.handle = fopen(argv[1], "r");
+  if( parser.handle == NULL ) {
     exit(1);
   }
 
-  pcc_context_t *ctx = pcc_create(&source);
+  pcc_context_t *ctx = pcc_create(&parser);
 
   while( pcc_parse(ctx, NULL) ) {
   };
 
   pcc_destroy( ctx );
 
-  fclose( source.handle );
-  source.handle = NULL;
+  fclose( parser.handle );
+  parser.handle = NULL;
 
   return 0;
 }
