@@ -10,21 +10,17 @@ enum SymType {
   symEnum
 };
 
-typedef struct NamespaceSymbol {
-  char* name;
-} NamespaceSymbol;
-
 typedef struct EnumFieldSymbol {
   char* name;
   unsigned value;
 } EnumFieldSymbol;
 
 typedef struct EnumSymbol {
-  char* name;
-  struct Symbol* fieldRoot;
+  struct SymbolTable* fieldTable;
 } EnumSymbol;
 
 typedef struct Symbol {
+  char* name;
   unsigned symType;
 
   union {
@@ -39,9 +35,16 @@ typedef struct Symbol {
 
 typedef struct SymbolTable {
   Symbol* root;
+  unsigned isOpen;
 } SymbolTable;
 
-unsigned DeclareSymbol( SymbolTable* symTable, Symbol* symbol );
-Symbol* LookupSymbol( SymbolTable* symTable, const char* name );
+Symbol* CreateSymbol( const char* symbolName, unsigned symbolType );
+void ReleaseSymbol( Symbol** symbolPtr );
+
+SymbolTable* CreateSymbolTable();
+void ReleaseSymbolTable( SymbolTable** symbolTablePtr );
+
+unsigned DeclareSymbol( SymbolTable* symbolTable, Symbol* symbol );
+Symbol* LookupSymbol( SymbolTable* symbolTable, const char* name );
 
 #endif
