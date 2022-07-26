@@ -6,8 +6,8 @@
 enum SymType {
   symNone,
   symNamespace,
-  symEnumField,
-  symEnum
+  symEnum,
+  symEnumField
 };
 
 typedef struct EnumFieldSymbol {
@@ -46,5 +46,8 @@ void ReleaseSymbolTable( SymbolTable** symbolTablePtr );
 
 unsigned DeclareSymbol( SymbolTable* symbolTable, Symbol* symbol );
 Symbol* LookupSymbol( SymbolTable* symbolTable, const char* name );
+
+unsigned DeclareEnum( SymbolTable* symbolTable,
+  const char* enumName, SymbolTable** fieldTablePtr );
 
 #endif

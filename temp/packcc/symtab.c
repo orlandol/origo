@@ -121,3 +121,30 @@ Symbol* LookupSymbol( SymbolTable* symbolTable, const char* name ) {
 
   return symbol;
 }
+
+unsigned DeclareEnum( SymbolTable* symbolTable,
+  const char* enumName, SymbolTable** fieldTablePtr ) {
+
+  Symbol* newEnum = NULL;
+  SymbolTable* newFieldTable = NULL;
+
+  if( !(symbolTable && symbolTable->isOpen) ) { return 1; }
+  if( !(enumName && (*enumName)) ) { return 2; }
+  if( !(fieldTablePtr && (*fieldTablePtr)) ) { return 3; }
+
+  newEnum = CreateSymbol(enumName, symEnum);
+
+  if( newEnum ) {
+    newFieldTable = CreateSymbolTable();
+    if( newFieldTable ) {
+      newEnum->sym.Enum.fieldTable = newFieldTable;
+      *fieldTablePtr = newFieldTable;
+      return 0;
+    }
+  }
+
+  ReleaseSymbol( &newEnum );
+  ReleaseSymbolTable( &newFieldTable );
+
+  return 4;
+}
