@@ -130,21 +130,53 @@ unsigned DeclareEnum( SymbolTable* symbolTable,
 
   if( !(symbolTable && symbolTable->isOpen) ) { return 1; }
   if( !(enumName && (*enumName)) ) { return 2; }
-  if( !(fieldTablePtr && (*fieldTablePtr)) ) { return 3; }
+  if( !(fieldTablePtr && ((*fieldTablePtr) == NULL)) ) { return 3; }
 
   newEnum = CreateSymbol(enumName, symEnum);
 
   if( newEnum ) {
     newFieldTable = CreateSymbolTable();
+
     if( newFieldTable ) {
       newEnum->sym.Enum.fieldTable = newFieldTable;
       *fieldTablePtr = newFieldTable;
-      return 0;
+
+      if( DeclareSymbol(symbolTable, newEnum) == 0 ) {
+        return 0;
+      }
     }
   }
 
   ReleaseSymbol( &newEnum );
   ReleaseSymbolTable( &newFieldTable );
+
+  return 4;
+}
+
+unsigned CloseEnum( SymbolTable* symbolTable, const char* enumName ) {
+  Symbol* enumSymbol = NULL;
+
+  if( symbolTable == NULL ) { return 1; }
+  if( !(enumName && (*enumName)) ) { return 2; }
+
+  enumSymbol = LookupSymbol(symbolTable, enumName);
+  if( enumSymbol && enumSymbol->sym.Enum.fieldTable ) {
+    enumSymbol->sym.Enum.fieldTable->isOpen = 0;
+
+    return 0;
+  }
+
+  return 3;
+}
+
+unsigned DeclareField( SymbolTable* fieldTable,
+  const char* fieldName, unsigned fieldValue ) {
+
+  return 4;
+}
+
+unsigned SetFieldValue( SymbolTable* fieldTable,
+  const char* fieldName, unsigned fieldValue ) {
 
   return 4;
 }

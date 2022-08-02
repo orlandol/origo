@@ -49,5 +49,11 @@ Symbol* LookupSymbol( SymbolTable* symbolTable, const char* name );
 
 unsigned DeclareEnum( SymbolTable* symbolTable,
   const char* enumName, SymbolTable** fieldTablePtr );
+unsigned CloseEnum( SymbolTable* symbolTable, const char* enumName );
+
+unsigned DeclareField( SymbolTable* fieldTable,
+  const char* fieldName, unsigned fieldValue );
+unsigned SetFieldValue( SymbolTable* fieldTable,
+  const char* fieldName, unsigned fieldValue );
 
 #endif
