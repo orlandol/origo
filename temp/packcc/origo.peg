@@ -108,9 +108,9 @@ goto_statement <-
   }
 
 #QUALIFIEDIDENT <-
-#  <IDENT> {
+#  '.' _ <IDENT> {
 #  }
-#/ '.' <IDENT> {
+#/ <IDENT> {
 #  }
 
 IDENT <- [_a-zA-Z][_a-zA-Z0-9]*

@@ -11,6 +11,8 @@ if exist test.h del test.h
 if exist test.def del test.def
 if exist test.exe del test.exe
 
+if exist testst.exe del testst.exe
+
 if exist origo.c del origo.c
 if exist origo.h del origo.h
 if exist origo.def del origo.def

@@ -11,7 +11,9 @@ void DumpSymbolTable( SymbolTable* symbolTable ) {
 
   if( symbolTable == NULL ) { return; }
 
-  avl_tree_for_each_in_postorder(symbol, symbolTable->root, Symbol, node) {
+  avl_tree_for_each_in_postorder(symbol,
+      symbolTable->root, Symbol, node) {
+
     switch( symbol->symType ) {
     case symNamespace:
       printf( "Symbol[Namespace:%s]\n", symbol->name );
@@ -23,7 +25,7 @@ void DumpSymbolTable( SymbolTable* symbolTable ) {
       break;
 
     case symEnumField:
-      printf( "Symbol[EnumField:%s]\n", symbol->name );
+      printf( "+ Symbol[EnumField:%s]\n", symbol->name );
       break;
 
     default:
@@ -50,14 +52,41 @@ int main( int argc, char** argv ) {
   }
 
   SymbolTable* fieldtab = NULL;
+
   if( result = DeclareEnum(symtab, "FileMode", &fieldtab) ) {
     printf( "Error[%u] in DeclareEnum\n", result );
     exit(2);
   }
 
+  result = DeclareEnum(symtab, "FileMode", &fieldtab);
+  if( result == 0 ) {
+    printf( "Duplicate[FileMode] succeeded in DeclareEnum\n" );
+    exit(3);
+  }
+
+  EnumFieldSymbol* fieldSymbol = NULL;
+
+  fieldSymbol = DeclareEnumField(fieldtab, "Read", 1);
+  if( fieldSymbol == NULL ) {
+    printf( "Error in DeclareEnumField[FileMode.Read]\n" );
+    exit(4);
+  }
+
+  fieldSymbol = DeclareEnumField(fieldtab, "Write", 2);
+  if( fieldSymbol == NULL ) {
+    printf( "Error in DeclareEnumField[FileMode.Write]\n" );
+    exit(5);
+  }
+
   if( result = CloseEnum(symtab, "FileMode") ) {
     printf( "Error[%u] in CloseEnum\n", result );
-    exit(3);
+    exit(6);
+  }
+
+  fieldSymbol = DeclareEnumField(fieldtab, "Append", 4);
+  if( fieldSymbol ) {
+    printf( "DeclareEnumField[FileMode:Append] succeeded on a closed Enum\n" );
+    exit(7);
   }
 
   DumpSymbolTable( symtab );

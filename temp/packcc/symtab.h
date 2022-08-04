@@ -51,9 +51,7 @@ unsigned DeclareEnum( SymbolTable* symbolTable,
   const char* enumName, SymbolTable** fieldTablePtr );
 unsigned CloseEnum( SymbolTable* symbolTable, const char* enumName );
 
-unsigned DeclareField( SymbolTable* fieldTable,
-  const char* fieldName, unsigned fieldValue );
-unsigned SetFieldValue( SymbolTable* fieldTable,
+EnumFieldSymbol* DeclareEnumField( SymbolTable* fieldTable,
   const char* fieldName, unsigned fieldValue );
 
 #endif

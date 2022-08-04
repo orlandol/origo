@@ -16,7 +16,6 @@ Symbol* CreateSymbol( const char* symbolName, unsigned symbolType ) {
       if( newSymbol->name ) {
         strcpy( newSymbol->name, symbolName );
         newSymbol->symType = symbolType;
-
         return newSymbol;
       }
 
@@ -169,14 +168,23 @@ unsigned CloseEnum( SymbolTable* symbolTable, const char* enumName ) {
   return 3;
 }
 
-unsigned DeclareField( SymbolTable* fieldTable,
+EnumFieldSymbol* DeclareEnumField( SymbolTable* fieldTable,
   const char* fieldName, unsigned fieldValue ) {
 
-  return 4;
-}
+  Symbol* newEnumField = NULL;
 
-unsigned SetFieldValue( SymbolTable* fieldTable,
-  const char* fieldName, unsigned fieldValue ) {
+  if( !(fieldTable && fieldTable->isOpen) ) { return NULL; }
+  if( !(fieldName && (*fieldName)) ) { return NULL; }
 
-  return 4;
+  newEnumField = CreateSymbol(fieldName, symEnumField);
+  if( newEnumField ) {
+    if( DeclareSymbol(fieldTable, newEnumField) == 0 ) {
+      newEnumField->sym.EnumField.value = fieldValue;
+      return newEnumField;
+    }
+  }
+
+  ReleaseSymbol( &newEnumField );
+
+  return NULL;
 }
