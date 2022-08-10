@@ -1,0 +1,165 @@
+%earlyheader {
+}
+
+%header {
+  #include "sds.h" /// TODO: Insert sds.h contents here
+  #include "avl_tree.h" /// TODO: Insert avl_tree.h contents here
+
+  #include "symtab.h" /// TODO: Insert symtab.h contents here
+
+  typedef struct Parser {
+    FILE* handle;
+    SymbolTable* symtab;
+  } Parser;
+}
+
+%auxil "Parser*"
+
+%source {
+  // begin strnlen copied from packcc.c source file, as a workaround for TinyCC
+  #ifdef __TINYC__
+  static size_t strnlen(const char *str, size_t maxlen) {
+    size_t i;
+    for( i = 0; (i < maxlen) && str[i]; i++ ) {
+    };
+    return i;
+  }
+  #endif
+  // end strnlen
+
+  /// Begin PCC_GETCHAR override
+  #define PCC_GETCHAR(auxil) (auxil ? fgetc(auxil->handle) : EOF)
+  // End PCC_GETCHAR override
+
+  #include "sdsalloc.h" /// TODO: Insert sdsalloc.h contents here
+  #include "sds.c" /// TODO: Selectively insert sds.c contents here
+  #include "avl_tree.c" /// TODO: Insert avl_tree.c contents here
+
+  #include "symtab.c" /// TODO: Insert symtab.c contents here
+}
+
+program <-
+  _ program_header (_ toplevel)* _ run (_ toplevel)* _ eof {
+    /// TODO: Write remaining text to intermediate files
+  }
+
+program_header <-
+  'program' _ <IDENT> {
+    /// TODO: Declare root namespace as IDENT
+
+    printf(
+      "\n"
+      "// program %s\n"
+      "\n",
+      $1
+    );
+  }
+
+toplevel <-
+  enum_declaration
+
+enum_declaration <-
+  enum_header (_ enum_field?)* _ 'end' {
+    /// TODO: Write C declaration from Enum table
+  }
+
+enum_header <-
+  'enum' _ <IDENT> {
+    printf( "#error Enum declaration pending implementation\n\n" ); // Temporary
+    /// TODO: Create Enum table
+  }
+
+enum_field <-
+  &'end'
+/ ',' _ <IDENT> {
+    /// TODO: Push field
+    /// TODO: Set current value
+  }
+/ <IDENT> {
+    /// TODO: Clear field stack
+    /// TODO: Push field
+    /// TODO: Declare field with current value
+    /// TODO: Increment current value
+  }
+/ '=' _ CONSTEXPR {
+    /// TODO: Pop each field on the field stack and set value
+  }
+
+run <-
+  run_header (_ STATEMENT)* _ 'end' {
+    printf(
+      "\n"
+      "  return 0;\n"
+      "}\n"
+    );
+  }
+
+run_header <-
+  'run' {
+    printf( "int main( int argc, char** argv ) {\n" );
+  }
+
+CONSTEXPR <- CONSTVAL
+
+CONSTVAL <-
+  [0-9]+
+/ <IDENT> {
+    /// TODO: Lookup IDENT value
+  }
+
+STATEMENT <-
+  label_declaration
+/ goto_statement
+#/ QUALIFIEDIDENT # Temporary
+
+label_declaration <-
+  <IDENT> _ ':' {
+    printf( "%s:\n", $1 );
+  }
+
+goto_statement <-
+  'goto' _ <IDENT> {
+    printf( "  goto %s;\n", $1 );
+  }
+
+#QUALIFIEDIDENT <-
+#  '.' _ <IDENT> {
+#  }
+#/ <IDENT> {
+#  }
+
+IDENT <- [_a-zA-Z][_a-zA-Z0-9]*
+_ <- (' ' / [\r] / [\n] / [\r\n] / [\t])*
+eof <- !.
+
+%%
+
+/// TODO: Implement file name deduction
+
+Parser parser = {};
+
+int main( int argc, char* argv[] ) {
+  if( argc != 2 ) {
+    exit(1);
+  }
+
+  parser.handle = fopen(argv[1], "r");
+  if( parser.handle == NULL ) {
+    exit(1);
+  }
+
+  pcc_context_t *ctx = pcc_create(&parser);
+
+  while( pcc_parse(ctx, NULL) ) {
+  };
+
+  pcc_destroy( ctx );
+
+  fclose( parser.handle );
+  parser.handle = NULL;
+
+  /// TODO: Build intermediate files
+  /// TODO: Apply version information to executable
+
+  return 0;
+}
