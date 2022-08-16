@@ -9,6 +9,7 @@
 #endif
 
 #define STACK_GROWTH_INCREMENT (1 << (STACK_GROWTH_SHIFT))
+#define STACK_GROWTH_MASK (STACK_GROWTH_INCREMENT - 1)
 
 Stack* CreateStack() {
   return calloc(1, sizeof(Stack));
@@ -39,16 +40,16 @@ unsigned GrowStack( Stack* stack ) {
   }
 
   // If any slots are left...
-  if( stack->top & (STACK_GROWTH_INCREMENT - 1) ) {
+  if( stack->bottom & STACK_GROWTH_MASK ) {
     // ...then the stack doesn't need to grow yet.
     return 0;
   }
 
   // ...else, grow by defined increment...
-  newBottom = (stack->bottom + STACK_GROWTH_INCREMENT) &
-    (~(STACK_GROWTH_INCREMENT - 1));
   newTop = (stack->top + STACK_GROWTH_INCREMENT) &
-    (~(STACK_GROWTH_INCREMENT - 1));
+    (~STACK_GROWTH_MASK);
+  newBottom = (stack->bottom + STACK_GROWTH_INCREMENT) &
+    (~STACK_GROWTH_MASK);
 
   // ...using realloc to reduce heap fragmentation...
   newSlots = realloc(stack->slot, newTop * sizeof(StackSlot));
