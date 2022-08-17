@@ -6,10 +6,13 @@
 
 Stack* stack = NULL;
 
-void DumpStack( Stack* sourceStack ) {
+void DumpStack( Stack* sourceStack, unsigned marker ) {
   unsigned slotIndex = 0;
 
-  printf( "Dumping stack...\n" );
+  printf( "Dumping stack %u - stack(%p) slots(%p) top(%u) bottom(%u)\n",
+      marker, stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
+      stack ? stack->bottom : 0 );
+
   if( (sourceStack == NULL) ||
     (sourceStack->top == sourceStack->bottom) ) {
 
@@ -41,63 +44,160 @@ int main( int argc, char** argv ) {
 
   stack = CreateStack();
 
-  DumpStack( stack );
+  DumpStack( stack, 0 );
 
-  result = Push(stack, 1234);
+  result = CompactStack(stack);
   if( result ) {
-    printf( "Error in Push[%u]: stack(%p) top(%u) bottom(%u)\n",
-      result, stack, stack ? stack->top : 0,
+    printf( "Error in CompactStack[%u]: stack(%p) slots(%p) top(%u) bottom(%u)\n",
+      result, stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
       stack ? stack->bottom : 0 );
     exit(1);
   }
 
-  DumpStack( stack );
+  DumpStack( stack, 1 );
 
-  result = Push(stack, 2345);
+  result = Push(stack, 1234);
   if( result ) {
-    printf( "Error in Push[%u]: stack(%p) top(%u) bottom(%u)\n",
-      result, stack, stack ? stack->top : 0,
+    printf( "Error in Push[%u]: stack(%p) slots(%p) top(%u) bottom(%u)\n",
+      result, stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
       stack ? stack->bottom : 0 );
     exit(2);
   }
 
-  DumpStack( stack );
+  DumpStack( stack, 2 );
 
-  result = Pop(stack, &value);
+  result = CompactStack(stack);
   if( result ) {
-    printf( "Error in Pop[%u]: stack(%p) top(%u) bottom(%u)\n",
-      result, stack, stack ? stack->top : 0,
+    printf( "Error in CompactStack[%u]: stack(%p) slots(%p) top(%u) bottom(%u)\n",
+      result, stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
       stack ? stack->bottom : 0 );
     exit(3);
   }
 
-  if( value != 2345 ) {
-    printf( "Expected 2345 from Push: %u\n", value );
+  DumpStack( stack, 3 );
+
+  result = Push(stack, 2345);
+  if( result ) {
+    printf( "Error in Push[%u]: stack(%p) slots(%p) top(%u) bottom(%u)\n",
+      result, stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
+      stack ? stack->bottom : 0 );
     exit(4);
   }
 
-  result = Pop(stack, &value);
+  DumpStack( stack, 4 );
+
+  result = Peek(stack, &value);
   if( result ) {
-    printf( "Error in Pop[%u]: stack(%p) top(%u) bottom(%u)\n",
-      result, stack, stack ? stack->top : 0,
+    printf( "Error in Peek[%u]: stack(%p) slots(%p) top(%u) bottom(%u)\n",
+      result, stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
       stack ? stack->bottom : 0 );
     exit(5);
   }
 
-  result = Pop(stack, &value);
-  if( result == 0 ) {
-    printf( "Expected Pop[%u] to fail: stack(%p) top(%u) bottom(%u)\n",
-      result, stack, stack ? stack->top : 0,
-      stack ? stack->bottom : 0 );
+  if( value != 2345 ) {
+    printf( "Expected 2345 from Peek: %u\n", value );
     exit(6);
   }
 
-  if( value != 1234 ) {
-    printf( "Expected 1234 from Push: %u\n", value );
+  result = PeekAhead(stack, 2, &value);
+  if( result == 0 ) {
+    printf( "Expected PeekAhead[%u] to fail: byAmount(2) stack(%p) slots(%p) top(%u) bottom(%u)\n",
+      result, stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
+      stack ? stack->bottom : 0 );
     exit(7);
   }
 
-  DumpStack( stack );
+  result = PeekAhead(stack, 1, &value);
+  if( result ) {
+    printf( "Error in PeekAhead[%u]: byAmount(1) stack(%p) slots(%p) top(%u) bottom(%u)\n",
+      result, stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
+      stack ? stack->bottom : 0 );
+    exit(8);
+  }
+
+  if( value != 1234 ) {
+    printf( "Expected 1234 from PeekAhead: %u\n", value );
+    exit(9);
+  }
+
+  result = PeekAhead(stack, 0, &value);
+  if( result ) {
+    printf( "Error in PeekAhead[%u]: byAmount(0) stack(%p) slots(%p) top(%u) bottom(%u)\n",
+      result, stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
+      stack ? stack->bottom : 0 );
+    exit(10);
+  }
+
+  if( value != 2345 ) {
+    printf( "Expected 2345 from PeekAhead: %u\n", value );
+    exit(11);
+  }
+
+  result = Pop(stack, &value);
+  if( result ) {
+    printf( "Error in Pop[%u]: stack(%p) slots(%p) top(%u) bottom(%u)\n",
+      result, stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
+      stack ? stack->bottom : 0 );
+    exit(12);
+  }
+
+  if( value != 2345 ) {
+    printf( "Expected 2345 from Pop: %u\n", value );
+    exit(13);
+  }
+
+  DumpStack( stack, 5 );
+
+  result = Pop(stack, &value);
+  if( result ) {
+    printf( "Error in Pop[%u]: stack(%p) slots(%p) top(%u) bottom(%u)\n",
+      result, stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
+      stack ? stack->bottom : 0 );
+    exit(14);
+  }
+
+  DumpStack( stack, 6 );
+
+  result = Peek(stack, &value);
+  if( result == 0 ) {
+    printf( "Expected Peek[%u] to fail: stack(%p) slots(%p) top(%u) bottom(%u)\n",
+      result, stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
+      stack ? stack->bottom : 0 );
+    exit(15);
+  }
+
+  result = PeekAhead(stack, 0, &value);
+  if( result == 0 ) {
+    printf( "Expected PeekAhead[%u] to fail: byAmount(0) stack(%p) slots(%p) top(%u) bottom(%u)\n",
+      result, stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
+      stack ? stack->bottom : 0 );
+    exit(16);
+  }
+
+  result = Pop(stack, &value);
+  if( result == 0 ) {
+    printf( "Expected Pop[%u] to fail: stack(%p) slots(%p) top(%u) bottom(%u)\n",
+      result, stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
+      stack ? stack->bottom : 0 );
+    exit(17);
+  }
+
+  if( value != 1234 ) {
+    printf( "Expected 1234 from Pop: %u\n", value );
+    exit(18);
+  }
+
+  DumpStack( stack, 7 );
+
+  result = CompactStack(stack);
+  if( result ) {
+    printf( "Error in CompactStack[%u]: stack(%p) slots(%p) top(%u) bottom(%u)\n",
+      result, stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
+      stack ? stack->bottom : 0 );
+    exit(19);
+  }
+
+  DumpStack( stack, 8 );
 
   Cleanup();
 
