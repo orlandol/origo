@@ -161,7 +161,7 @@ unsigned Peek( Stack* stack, StackSlot* toItem ) {
 unsigned PeekAhead( Stack* stack, unsigned byAmount, StackSlot* toItem ) {
   if( stack == NULL ) { return 1; }
 
-  if( byAmount > (stack->top - stack->bottom) ) { return 2; }
+  if( byAmount >= (stack->top - stack->bottom) ) { return 2; }
 
   if( toItem == NULL ) { return 3; }
 
