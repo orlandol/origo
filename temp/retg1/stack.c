@@ -40,16 +40,14 @@ unsigned GrowStack( Stack* stack ) {
   }
 
   // If any slots are left...
-  if( stack->bottom & STACK_GROWTH_MASK ) {
+  if( (stack->bottom & STACK_GROWTH_MASK) >= STACK_GROWTH_MASK  ) {
     // ...then the stack doesn't need to grow yet.
     return 0;
   }
 
   // ...else, grow by defined increment...
-  newTop = (stack->top + STACK_GROWTH_INCREMENT) &
-    (~STACK_GROWTH_MASK);
-  newBottom = (stack->bottom + STACK_GROWTH_INCREMENT) &
-    (~STACK_GROWTH_MASK);
+  newTop = (stack->top & (~STACK_GROWTH_MASK)) + STACK_GROWTH_INCREMENT;
+  newBottom = (stack->bottom & (~STACK_GROWTH_MASK)) + STACK_GROWTH_INCREMENT;
 
   // ...using realloc to reduce heap fragmentation...
   newSlots = realloc(stack->slot, newTop * sizeof(StackSlot));
@@ -60,7 +58,7 @@ unsigned GrowStack( Stack* stack ) {
   // ...at the potential cost of an extra memmove
   if( newTop != newBottom ) {
     memmove( &newSlots[newBottom], &newSlots[stack->bottom],
-      (newTop - newBottom) * sizeof(StackSlot) );
+      newTop * sizeof(StackSlot) );
     memset( &newSlots[stack->bottom], 0,
       STACK_GROWTH_INCREMENT * sizeof(StackSlot) );
   }
@@ -77,6 +75,47 @@ unsigned CompactStack( Stack* stack ) {
   unsigned newTop;
   unsigned newBottom;
 
+  if( (stack == NULL) || (stack->top < stack->bottom) ) { return 1; }
+
+  if( stack->slot == NULL ) { return 0; }
+
+  newTop = stack->top - stack->bottom;
+  newBottom = 0;
+
+  if( newTop != newBottom ) {
+    if( stack->slot ) {
+      memmove( &stack->slot[0], &stack->slot[stack->bottom],
+        stack->bottom * sizeof(StackSlot) );
+    }
+
+    newSlots = realloc(stack->slot, newTop * sizeof(StackSlot));
+    if( newSlots == NULL ) {
+      return 2;
+    }
+
+    stack->slot = newSlots;
+    stack->top = newTop;
+    stack->bottom = newBottom;
+
+    return 0;
+  }
+
+  if( stack->slot ) {
+    free( stack->slot );
+    stack->slot = NULL;
+
+    return 0;
+  }
+
+  return 3;
+}
+
+/*
+unsigned CompactStack( Stack* stack ) {
+  StackSlot* newSlots = NULL;
+  unsigned newTop;
+  unsigned newBottom;
+
 printf( "CompactStack: Begin - stack(%p) slots(%p) top(%u) bottom(%u)\n",
 stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
 stack ? stack->bottom : 0 );
@@ -85,7 +124,7 @@ stack ? stack->bottom : 0 );
 
   // A NULL stack is compact
   if( stack->slot == NULL ) // { return 0; }
-{ printf( "CompactStack: End 1\n\n" ); return 0; }
+{ printf( "CompactStack: End 1 [slots == NULL]\n\n" ); return 0; }
 
   newTop = stack->top - stack->bottom;
   newBottom = 0;
@@ -96,7 +135,7 @@ stack ? stack->bottom : 0, newTop, newBottom );
 
     if( newTop != newBottom ) {
       memmove( &stack->slot[0], &stack->slot[stack->bottom],
-        newTop * sizeof(StackSlot) );
+        stack->bottom * sizeof(StackSlot) );
 
       newSlots = realloc(stack->slot,
         newTop * sizeof(StackSlot));
@@ -123,6 +162,7 @@ stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
 stack ? stack->bottom : 0, newTop, newBottom );
   return 0;
 }
+*/
 
 unsigned Push( Stack* stack, StackSlot fromItem ) {
   if( stack == NULL ) { return 1; }

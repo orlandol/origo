@@ -46,9 +46,8 @@ int main( int argc, char** argv ) {
 
   DumpStack( stack, 0 );
 
-//  printf( "1:result = CompactStack(stack);\n" );
-//  result = CompactStack(stack);
-  result = 0;
+  printf( "1:result = CompactStack(stack);\n" );
+  result = CompactStack(stack);
   if( result ) {
     printf( "Error in CompactStack[%u]: stack(%p) slots(%p) top(%u) bottom(%u)\n",
       result, stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
@@ -69,9 +68,8 @@ int main( int argc, char** argv ) {
 
   DumpStack( stack, 2 );
 
-//  printf( "3:result = CompactStack(stack);\n" );
-//  result = CompactStack(stack);
-  result = 0;
+  printf( "3:result = CompactStack(stack);\n" );
+  result = CompactStack(stack);
   if( result ) {
     printf( "Error in CompactStack[%u]: stack(%p) slots(%p) top(%u) bottom(%u)\n",
       result, stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
@@ -209,9 +207,9 @@ int main( int argc, char** argv ) {
 
   DumpStack( stack, 7 );
 
-//  printf( "19:result = CompactStack(stack);\n" );
-//  result = CompactStack(stack);
-  result = 0;
+/*
+  printf( "19:result = CompactStack(stack);\n" );
+  result = CompactStack(stack);
   if( result ) {
     printf( "Error in CompactStack[%u]: stack(%p) slots(%p) top(%u) bottom(%u)\n",
       result, stack, stack ? stack->slot : NULL, stack ? stack->top : 0,
@@ -220,6 +218,7 @@ int main( int argc, char** argv ) {
   }
 
   DumpStack( stack, 8 );
+*/
 
   Cleanup();
 
