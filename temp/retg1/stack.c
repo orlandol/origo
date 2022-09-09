@@ -56,7 +56,7 @@ unsigned GrowStack( Stack* stack ) {
   }
 
   // ...at the potential cost of an extra memmove
-  if( newTop != newBottom ) {
+  if( newTop > newBottom ) {
     memmove( &newSlots[newBottom], &newSlots[stack->bottom],
       newTop * sizeof(StackSlot) );
     memset( &newSlots[stack->bottom], 0,
@@ -77,12 +77,10 @@ unsigned CompactStack( Stack* stack ) {
 
   if( (stack == NULL) || (stack->top < stack->bottom) ) { return 1; }
 
-  if( stack->slot == NULL ) { return 0; }
-
   newTop = stack->top - stack->bottom;
   newBottom = 0;
 
-  if( newTop != newBottom ) {
+  if( newTop > newBottom ) {
     if( stack->slot ) {
       memmove( &stack->slot[0], &stack->slot[stack->bottom],
         stack->bottom * sizeof(StackSlot) );
@@ -103,11 +101,12 @@ unsigned CompactStack( Stack* stack ) {
   if( stack->slot ) {
     free( stack->slot );
     stack->slot = NULL;
-
-    return 0;
   }
 
-  return 3;
+  stack->top = 0;
+  stack->bottom = 0;
+
+  return 0;
 }
 
 /*
