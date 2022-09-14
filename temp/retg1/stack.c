@@ -4,11 +4,11 @@
 
 #include "stack.h"
 
-#ifndef STACK_GROWTH_SHIFT
-  #define STACK_GROWTH_SHIFT 4
+#ifndef STACK_GROWTH_NUMBITS
+  #define STACK_GROWTH_NUMBITS (4)
 #endif
 
-#define STACK_GROWTH_INCREMENT (1 << (STACK_GROWTH_SHIFT))
+#define STACK_GROWTH_INCREMENT (1 << STACK_GROWTH_NUMBITS)
 #define STACK_GROWTH_MASK (STACK_GROWTH_INCREMENT - 1)
 
 Stack* CreateStack() {
@@ -29,6 +29,40 @@ void ReleaseStack( Stack** stackPtr ) {
   }
 }
 
+unsigned GrowStack( Stack* stack ) {
+  StackSlot* newSlot = NULL;
+  unsigned newTop;
+  unsigned newBottom;
+
+  if( stack == NULL ) { return 1; }
+
+  if( (((unsigned)-1) - stack->top) < STACK_GROWTH_INCREMENT ) {
+    return 2;
+  }
+
+  newTop = (stack->top & (~STACK_GROWTH_MASK)) + STACK_GROWTH_INCREMENT;
+  newBottom = newTop - (stack->top - stack->bottom);
+
+  if( stack->bottom == 0 ) {
+    newSlot = realloc(stack->slot, newTop * sizeof(StackSlot));
+    if( newSlot == NULL ) {
+      return 3;
+    }
+
+    if( stack->slot ) {
+      memmove( &newSlot[newBottom], &newSlot[stack->bottom],
+        stack->bottom * sizeof(StackSlot) );
+    }
+
+    stack->slot = newSlot;
+    stack->top = newTop;
+    stack->bottom = newBottom;
+  }
+
+  return 0;
+}
+
+/*
 unsigned GrowStack( Stack* stack ) {
   StackSlot* newSlots = NULL;
   unsigned newTop;
@@ -69,6 +103,7 @@ unsigned GrowStack( Stack* stack ) {
 
   return 0;
 }
+*/
 
 unsigned CompactStack( Stack* stack ) {
   StackSlot* newSlots = NULL;
