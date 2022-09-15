@@ -9,8 +9,12 @@ typedef struct Stack {
   unsigned bottom;
 } Stack;
 
+typedef void (*ReleaseSlotFunc)( StackSlot** slotPtr );
+
 Stack* CreateStack();
 void ReleaseStack( Stack** stackPtr );
+void ReleasePointerStack( Stack** stackPtr,
+  ReleaseSlotFunc releaseSlot );
 
 unsigned GrowStack( Stack* stack );
 unsigned ReserveStack( Stack* stack );
