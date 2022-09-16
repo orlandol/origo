@@ -9,7 +9,7 @@ typedef struct Stack {
   unsigned bottom;
 } Stack;
 
-typedef void (*ReleaseSlotFunc)( StackSlot** slotPtr );
+typedef unsigned (*ReleaseSlotFunc)( StackSlot** slotPtr );
 
 Stack* CreateStack();
 void ReleaseStack( Stack** stackPtr );

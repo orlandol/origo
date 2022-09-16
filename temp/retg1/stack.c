@@ -1,4 +1,3 @@
-
 #include <stdlib.h>
 #include <string.h>
 
@@ -31,10 +30,27 @@ void ReleaseStack( Stack** stackPtr ) {
 
 void ReleasePointerStack( Stack** stackPtr,
   ReleaseSlotFunc releaseSlot ) {
+  	
+  StackSlot* slotPtr;
+  unsigned index;
 
   if( stackPtr ) {
     if( (*stackPtr) ) {
-    ///TODO: Loop through stack and call releaseSlot
+      if( (*stackPtr)->slot ) {
+        for( index = (*stackPtr)->bottom; index < (*stackPtr)->top; index++ ) {
+          slotPtr = (*stackPtr)->slot[index];
+      	
+          if( releaseSlot(&slotPtr) ) {
+            break;
+          }
+        }
+    
+        free( (*stackPtr)->slot );
+        (*stackPtr)->slot = NULL;
+      }
+  
+      free( (*stackPtr) );
+      (*stackPtr) = NULL;
     }
   }
 }
