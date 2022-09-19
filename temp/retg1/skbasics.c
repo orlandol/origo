@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define STACKSLOT_TYPE unsigned
 #include "stack.h"
 
 Stack* stack = NULL;
@@ -204,4 +205,6 @@ int main( int argc, char** argv ) {
   return 0;
 }
 
-#include "stack.c"
+#define STACKSLOT_TYPE unsigned
+#define STACK_IMPLEMENTATION
+#include "stack.h"
