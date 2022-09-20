@@ -1,42 +1,51 @@
 #ifndef STACK_H
 #define STACK_H
 
-// #define STACKSLOT_TYPE ... before including stack.h
-// #define STACKSLOT_TYPENAME ... before including stack.h. Defaults to "StackSlot"
 #ifndef STACKSLOT_TYPENAME
 #define STACKSLOT_TYPENAME StackSlot
 #endif
-typedef STACKSLOT_TYPE STACKSLOT_TYPENAME;
 
-// define STACK_TYPENAME ... before including stack.h. Defaults to "Stack"
 #ifndef STACK_TYPENAME
 #define STACK_TYPENAME Stack
 #endif
 
-typedef struct STACK_TYPENAME {
-  STACKSLOT_TYPENAME* slot;
-  unsigned top;
-  unsigned bottom;
-} STACK_TYPENAME;
+#define DECLARE_STACK_TYPES \
+  typedef STACKSLOT_TYPE STACKSLOT_TYPENAME;\
+  \
+  typedef struct STACK_TYPENAME {\
+    STACKSLOT_TYPENAME* slot;\
+    unsigned top;\
+    unsigned bottom;\
+  } STACK_TYPENAME;
 
-typedef unsigned (*ReleaseSlotFunc)( STACKSLOT_TYPENAME* slotPtr );
+#define DECLARE_CREATESTACK( FUNCNAME )\
+STACK_TYPENAME* FUNCNAME();
 
-STACK_TYPENAME* CreateStack();
-void ReleaseStack( STACK_TYPENAME** stackPtr );
+#define DECLARE_RELEASESTACK( FUNCNAME )\
+void FUNCNAME( STACK_TYPENAME** stackPtr );
 
-#define DECLARE_RELEASEPOINTERSTACK( FUNCNAME )\
-void ReleasePointerStack( STACK_TYPENAME** stackPtr,\
-  ReleaseSlotFunc releaseSlot );
+#define DECLARE_RELEASESTACKSLOTS( FUNCNAME )\
+void FUNCNAME( STACK_TYPENAME** stackPtr,\
+  unsigned (*releaseSlot)( STACKSLOT_TYPENAME* slotPtr );
 
-unsigned GrowStack( STACK_TYPENAME* stack );
-unsigned ReserveStack( STACK_TYPENAME* stack );
+#define DECLARE_GROWSTACK( FUNCNAME )\
+unsigned FUNCNAME( STACK_TYPENAME* stack );
+
+#define DECLARE_COMPACTSTACK( FUNCNAME )\
 unsigned CompactStack( STACK_TYPENAME* stack );
 
-unsigned Push( STACK_TYPENAME* stack, STACKSLOT_TYPENAME fromItem );
-unsigned Pop( STACK_TYPENAME* stack, STACKSLOT_TYPENAME* toItem );
+#define DECLARE_PUSHSLOT( FUNCNAME )\
+unsigned FUNCNAME( STACK_TYPENAME* stack, STACKSLOT_TYPENAME fromItem );
 
-unsigned PeekAhead( STACK_TYPENAME* stack, unsigned byAmount, STACKSLOT_TYPENAME* toItem );
-unsigned Peek( STACK_TYPENAME* stack, STACKSLOT_TYPENAME* toItem );
+#define DECLARE_POPSLOT( FUNCNAME )\
+unsigned FUNCNAME( STACK_TYPENAME* stack, STACKSLOT_TYPENAME* toItem );
+
+#define DECLARE_PEEKSLOTAHEAD( FUNCNAME )\
+unsigned FUNCNAME( STACK_TYPENAME* stack, unsigned byAmount,\
+  STACKSLOT_TYPENAME* toItem );
+
+#define DECLARE_PEEKSLOT( FUNCNAME )\
+unsigned FUNCNAME( STACK_TYPENAME* stack, STACKSLOT_TYPENAME* toItem );
 
 #endif // STACK_H
 
@@ -84,9 +93,9 @@ void ReleaseStack( STACK_TYPENAME** stackPtr ) {
   }
 }
 
-#define IMPLEMENT_RELEASEPOINTERSTACK( FUNCNAME )\
-void ReleasePointerStack( STACK_TYPENAME** stackPtr,\
-  ReleaseSlotFunc releaseSlot ) {\
+#define IMPLEMENT_RELEASESTACKSLOTS( FUNCNAME )\
+void FUNCNAME( STACK_TYPENAME** stackPtr,\
+  unsigned (*releaseSlot)( STACKSLOT_TYPENAME* slotPtr )\
   \
   STACKSLOT_TYPENAME* slotPtr;\
   unsigned index;\

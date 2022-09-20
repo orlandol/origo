@@ -2,8 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define STACKSLOT_TYPE unsigned
 #include "stack.h"
+
+#define STACKSLOT_TYPE unsigned
+DECLARE_STACK_TYPES
 
 Stack* stack = NULL;
 
