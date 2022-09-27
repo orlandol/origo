@@ -1,64 +1,57 @@
 #ifndef STACK_H
 #define STACK_H
 
-#define DECLARE_STACK_TYPES \
+#define DECLARE_STACK_TYPES( STACKSLOT_TYPE, STACKSLOT_TYPENAME, STACK_TYPENAME )\
+  \
   typedef STACKSLOT_TYPE STACKSLOT_TYPENAME;\
   \
   typedef struct STACK_TYPENAME {\
     STACKSLOT_TYPENAME* slot;\
     unsigned top;\
     unsigned bottom;\
-  } STACK_TYPENAME;\
-  \
-  typedef unsigned (*ReleaseSlotFunc)( STACKSLOT_TYPENAME* slotPtr );
+  } STACK_TYPENAME;
 
-#define DECLARE_CREATESTACK( FUNCNAME )\
+#define DECLARE_CREATESTACK( STACK_TYPENAME, FUNCNAME )\
 STACK_TYPENAME* FUNCNAME();
 
-#define DECLARE_RELEASESTACK( FUNCNAME )\
+#define DECLARE_RELEASESTACK( STACK_TYPENAME, FUNCNAME )\
 void FUNCNAME( STACK_TYPENAME** stackPtr );
 
-#define DECLARE_RELEASESTACKSLOTS( FUNCNAME )\
-void FUNCNAME( STACK_TYPENAME** stackPtr,\
-  ReleaseSlotFunc releaseSlot );
+#define DECLARE_RELEASESLOTS( STACKSLOT_TYPENAME, STACK_TYPENAME, FUNCNAME )\
+unsigned FUNCNAME( STACK_TYPENAME* stack,\
+  unsigned (*releaseSlot)(STACKSLOT_TYPENAME* slotPtr) );
 
-#define DECLARE_GROWSTACK( FUNCNAME )\
+#define DECLARE_GROWSTACK( STACKSLOT_TYPENAME, STACK_TYPENAME, FUNCNAME )\
 unsigned FUNCNAME( STACK_TYPENAME* stack );
 
-#define DECLARE_COMPACTSTACK( FUNCNAME )\
+#define DECLARE_COMPACTSTACK( STACKSLOT_TYPENAME, STACK_TYPENAME, FUNCNAME )\
 unsigned CompactStack( STACK_TYPENAME* stack );
 
-#define DECLARE_PUSHSLOT( FUNCNAME )\
+#define DECLARE_PUSHSLOT( STACKSLOT_TYPENAME, STACK_TYPENAME, FUNCNAME )\
 unsigned FUNCNAME( STACK_TYPENAME* stack, STACKSLOT_TYPENAME fromItem );
 
-#define DECLARE_POPSLOT( FUNCNAME )\
+#define DECLARE_POPSLOT( STACKSLOT_TYPENAME, STACK_TYPENAME, FUNCNAME )\
 unsigned FUNCNAME( STACK_TYPENAME* stack, STACKSLOT_TYPENAME* toItem );
 
-#define DECLARE_PEEKSLOT( FUNCNAME )\
+#define DECLARE_PEEKSLOT( STACKSLOT_TYPENAME, STACK_TYPENAME, FUNCNAME )\
 unsigned FUNCNAME( STACK_TYPENAME* stack, STACKSLOT_TYPENAME* toItem );
 
-#define DECLARE_PEEKSLOTAHEAD( FUNCNAME )\
+#define DECLARE_PEEKSLOTAHEAD( STACKSLOT_TYPENAME, STACK_TYPENAME, FUNCNAME )\
 unsigned FUNCNAME( STACK_TYPENAME* stack, unsigned byAmount,\
   STACKSLOT_TYPENAME* toItem );
 
+#define DECLARE_DEFAULT_STACK_FUNCTIONS( STACKSLOT_TYPENAME, STACK_TYPENAME ) \
+  DECLARE_CREATESTACK( STACK_TYPENAME, CreateStack )\
+  DECLARE_RELEASESTACK( STACK_TYPENAME, ReleaseStack )\
+  DECLARE_RELEASESLOTS( STACKSLOT_TYPENAME, STACK_TYPENAME, ReleaseSlots )\
+  DECLARE_GROWSTACK( STACKSLOT_TYPENAME, STACK_TYPENAME, GrowStack )\
+  DECLARE_COMPACTSTACK( STACKSLOT_TYPENAME, STACK_TYPENAME, CompactStack )\
+  DECLARE_PUSHSLOT( STACKSLOT_TYPENAME, STACK_TYPENAME, Push )\
+  DECLARE_POPSLOT( STACKSLOT_TYPENAME, STACK_TYPENAME, Pop )\
+  DECLARE_PEEKSLOT( STACKSLOT_TYPENAME, STACK_TYPENAME, Peek )\
+  DECLARE_PEEKSLOTAHEAD( STACKSLOT_TYPENAME, STACK_TYPENAME, PeekAhead )
 
-#define DECLARE_STACK_DEFAULT_FUNCTIONS \
-  DECLARE_CREATESTACK( CreateStack )\
-  DECLARE_RELEASESTACK( ReleaseStack )\
-  DECLARE_GROWSTACK( GrowStack )\
-  DECLARE_COMPACTSTACK( CompactStack )\
-  DECLARE_PUSHSLOT( Push )\
-  DECLARE_POPSLOT( Pop )\
-  DECLARE_PEEKSLOT( Peek )\
-  DECLARE_PEEKAHEADSLOT( PeekAheadSlot )
 
-#endif // STACK_H
-
-#undef STACKSLOT_TYPE
-#undef STACKSLOT_TYPENAME
-#undef STACK_TYPENAME
-
-#ifdef STACK_IMPLEMENTATION
 #include <stdlib.h>
 #include <string.h>
 
@@ -69,13 +62,13 @@ unsigned FUNCNAME( STACK_TYPENAME* stack, unsigned byAmount,\
 #define STACK_GROWTH_INCREMENT (1 << STACK_GROWTH_NUMBITS)
 #define STACK_GROWTH_MASK (STACK_GROWTH_INCREMENT - 1)
 
-#define IMPLEMENT_CREATESTACK( FUNCNAME )\
+#define IMPLEMENT_CREATESTACK( STACK_TYPENAME, FUNCNAME )\
 STACK_TYPENAME* FUNCNAME() {\
   return calloc(1, sizeof(STACK_TYPENAME));\
 }
 
-#define IMPLEMENT_RELEASESTACK( FUNCNAME )\
-void ReleaseStack( STACK_TYPENAME** stackPtr ) {\
+#define IMPLEMENT_RELEASESTACK( STACK_TYPENAME, FUNCNAME )\
+void FUNCNAME( STACK_TYPENAME** stackPtr ) {\
   if( stackPtr ) {\
     if( (*stackPtr) ) {\
       if( (*stackPtr)->slot ) {\
@@ -89,35 +82,30 @@ void ReleaseStack( STACK_TYPENAME** stackPtr ) {\
   }\
 }
 
-#define IMPLEMENT_RELEASESTACKSLOTS( FUNCNAME )\
-void FUNCNAME( STACK_TYPENAME** stackPtr,\
-  ReleaseSlotFunc releaseSlot )\
+#define IMPLEMENT_RELEASESLOTS( STACKSLOT_TYPENAME, STACK_TYPENAME, FUNCNAME )\
+unsigned FUNCNAME( STACK_TYPENAME* stack,\
+  unsigned (*releaseSlot)(STACKSLOT_TYPENAME* slotPtr) ) {\
   \
-  STACKSLOT_TYPENAME* slotPtr;\
   unsigned index;\
   \
-  if( stackPtr ) {\
-    if( (*stackPtr) ) {\
-      if( (*stackPtr)->slot ) {\
-        for( index = (*stackPtr)->bottom; index < (*stackPtr)->top; index++ ) {\
-          slotPtr = (*stackPtr)->slot[index];\
-          \
-          if( releaseSlot(&slotPtr) ) {\
-            break;\
-          }\
-        }\
-        \
-        free( (*stackPtr)->slot );\
-        (*stackPtr)->slot = NULL;\
+  if( stack == NULL ) { return 1; }\
+  if( releaseSlot == NULL ) { return 2; }\
+  \
+  if( stack->slot ) {\
+    for( index = stack->bottom; index < stack->top; index++ ) {\
+      if( releaseSlot(&stack->slot[index]) ) {\
+        return 3;\
       }\
-      \
-      free( (*stackPtr) );\
-      (*stackPtr) = NULL;\
     }\
+    \
+    free( stack->slot );\
+    stack->slot = NULL;\
   }\
+  \
+  return 0;\
 }
 
-#define IMPLEMENT_GROWSTACK( FUNCNAME )\
+#define IMPLEMENT_GROWSTACK( STACKSLOT_TYPENAME, STACK_TYPENAME, FUNCNAME )\
 unsigned FUNCNAME( STACK_TYPENAME* stack ) {\
   STACKSLOT_TYPENAME* newSlot = NULL;\
   unsigned newTop;\
@@ -152,7 +140,7 @@ unsigned FUNCNAME( STACK_TYPENAME* stack ) {\
   return 0;\
 }
 
-#define IMPLEMENT_COMPACTSTACK( FUNCNAME )\
+#define IMPLEMENT_COMPACTSTACK( STACKSLOT_TYPENAME, STACK_TYPENAME, FUNCNAME )\
 unsigned FUNCNAME( STACK_TYPENAME* stack ) {\
   STACKSLOT_TYPENAME* newSlots = NULL;\
   unsigned newTop;\
@@ -192,7 +180,7 @@ unsigned FUNCNAME( STACK_TYPENAME* stack ) {\
   return 0;\
 }
 
-#define IMPLEMENT_STACKPUSH( FUNCNAME )\
+#define IMPLEMENT_PUSHSLOT( STACKSLOT_TYPENAME, STACK_TYPENAME, FUNCNAME )\
 unsigned FUNCNAME( STACK_TYPENAME* stack, STACKSLOT_TYPENAME fromItem ) {\
   if( stack == NULL ) { return 1; }\
   \
@@ -208,8 +196,8 @@ unsigned FUNCNAME( STACK_TYPENAME* stack, STACKSLOT_TYPENAME fromItem ) {\
   return 0;\
 }
 
-#define IMPLEMENT_STACKPOP( FUNCNAME )\
-unsigned Pop( STACK_TYPENAME* stack, STACKSLOT_TYPENAME* toItem ) {\
+#define IMPLEMENT_POPSLOT( STACKSLOT_TYPENAME, STACK_TYPENAME, FUNCNAME )\
+unsigned FUNCNAME( STACK_TYPENAME* stack, STACKSLOT_TYPENAME* toItem ) {\
   if( (stack == NULL) || (stack->top == stack->bottom) ) { return 1; }\
   if( toItem == NULL ) { return 2; }\
   \
@@ -219,8 +207,8 @@ unsigned Pop( STACK_TYPENAME* stack, STACKSLOT_TYPENAME* toItem ) {\
   return 0;\
 }
 
-#define IMPLEMENT_STACKPEEK( FUNCNAME )\
-unsigned Peek( STACK_TYPENAME* stack, STACKSLOT_TYPENAME* toItem ) {\
+#define IMPLEMENT_PEEKSLOT( STACKSLOT_TYPENAME, STACK_TYPENAME, FUNCNAME )\
+unsigned FUNCNAME( STACK_TYPENAME* stack, STACKSLOT_TYPENAME* toItem ) {\
   if( (stack == NULL) || (stack->top == stack->bottom) ) { return 1; }\
   if( toItem == NULL ) { return 2; }\
   \
@@ -229,7 +217,7 @@ unsigned Peek( STACK_TYPENAME* stack, STACKSLOT_TYPENAME* toItem ) {\
   return 0;\
 }
 
-#define IMPLEMENT_STACKPEEKAHEAD( FUNCNAME )\
+#define IMPLEMENT_PEEKSLOTAHEAD( STACKSLOT_TYPENAME, STACK_TYPENAME, FUNCNAME )\
 unsigned FUNCNAME( STACK_TYPENAME* stack, unsigned byAmount, STACKSLOT_TYPENAME* toItem ) {\
   if( stack == NULL ) { return 1; }\
   \
@@ -242,20 +230,15 @@ unsigned FUNCNAME( STACK_TYPENAME* stack, unsigned byAmount, STACKSLOT_TYPENAME*
   return 0;\
 }
 
-#define IMPLEMENT_STACK_DEFAULT_FUNCTIONS \
-  IMPLEMENT_CREATESTACK( CreateStack )\
-  IMPLEMENT_RELEASESTACK( ReleaseStack )\
-  IMPLEMENT_GROWSTACK( GrowStack )\
-  IMPLEMENT_COMPACTSTACK( CompactStack )\
-  IMPLEMENT_PUSHSLOT( Push )\
-  IMPLEMENT_POPSLOT( Pop )\
-  IMPLEMENT_PEEKSLOT( Peek )\
-  IMPLEMENT_PEEKAHEADSLOT( PeekAheadSlot )
+#define IMPLEMENT_STACK_DEFAULT_FUNCTIONS( STACKSLOT_TYPENAME, STACK_TYPENAME ) \
+  IMPLEMENT_CREATESTACK( STACK_TYPENAME, CreateStack )\
+  IMPLEMENT_RELEASESTACK( STACK_TYPENAME, ReleaseStack )\
+  IMPLEMENT_RELEASESLOTS( STACKSLOT_TYPENAME, STACK_TYPENAME, ReleaseSlots )\
+  IMPLEMENT_GROWSTACK( STACKSLOT_TYPENAME, STACK_TYPENAME, GrowStack )\
+  IMPLEMENT_COMPACTSTACK( STACKSLOT_TYPENAME, STACK_TYPENAME, CompactStack )\
+  IMPLEMENT_PUSHSLOT( STACKSLOT_TYPENAME, STACK_TYPENAME, Push )\
+  IMPLEMENT_POPSLOT( STACKSLOT_TYPENAME, STACK_TYPENAME, Pop )\
+  IMPLEMENT_PEEKSLOT( STACKSLOT_TYPENAME, STACK_TYPENAME, Peek )\
+  IMPLEMENT_PEEKSLOTAHEAD( STACKSLOT_TYPENAME, STACK_TYPENAME, PeekAhead )
 
-#undef STACKSLOT_TYPE
-#undef STACKSLOT_TYPENAME
-#undef STACK_TYPENAME
-
-#endif // STACK_IMPLEMENTATION
-
-#undef STACK_IMPLEMENTATION
+#endif

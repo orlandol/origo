@@ -4,12 +4,8 @@
 
 #include "stack.h"
 
-#define STACKSLOT_TYPE unsigned
-#define STACKSLOT_TYPENAME StackSlot
-#define STACK_TYPENAME Stack
-DECLARE_STACK_TYPES
-
-DECLARE_STACK_DEFAULT_FUNCTIONS
+DECLARE_STACK_TYPES( unsigned, StackSlot, Stack )
+DECLARE_DEFAULT_STACK_FUNCTIONS( StackSlot, Stack )
 
 Stack* stack = NULL;
 
@@ -211,10 +207,4 @@ int main( int argc, char** argv ) {
   return 0;
 }
 
-#define STACK_IMPLEMENTATION
-#include "stack.h"
-
-#define STACKSLOT_TYPE unsigned
-#define STACKSLOT_TYPENAME StackSlot
-#define STACK_TYPENAME Stack
-IMPLEMENT_STACK_DEFAULT_FUNCTIONS
+IMPLEMENT_STACK_DEFAULT_FUNCTIONS( StackSlot, Stack )
