@@ -3,9 +3,12 @@
 
 %header {
   #include "sds.h" /// TODO: Insert sds.h contents here
+
   #include "avl_tree.h" /// TODO: Insert avl_tree.h contents here
 
   #include "symtab.h" /// TODO: Insert symtab.h contents here
+
+  #include "lists.h" /// TODO: Insert lists.h contents here
 
   typedef struct Parser {
     FILE* handle;

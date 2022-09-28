@@ -23,3 +23,7 @@ if exist sdbasics.exe del sdbasics.exe
 if exist skbasics.exe del skbasics.exe
 
 if exist stbasics.exe del stbasics.exe
+
+if exist lsbasics.exe del lsbasics.exe
+
+if exist qubasics.exe del qubasics.exe

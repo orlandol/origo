@@ -2,10 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "stack.h"
+#include "lists.h"
 
-DECLARE_STACK_TYPES( unsigned, StackSlot, Stack )
-DECLARE_DEFAULT_STACK_FUNCTIONS( StackSlot, Stack )
+DECLARE_DEFAULT_STACK_TYPES( unsigned )
+DECLARE_DEFAULT_STACK_FUNCTIONS()
 
 Stack* stack = NULL;
 
@@ -207,4 +207,4 @@ int main( int argc, char** argv ) {
   return 0;
 }
 
-IMPLEMENT_STACK_DEFAULT_FUNCTIONS( StackSlot, Stack )
+IMPLEMENT_STACK_DEFAULT_FUNCTIONS()
