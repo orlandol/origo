@@ -27,16 +27,16 @@ unsigned GrowQueue( QUEUE_TYPENAME* queue );
 unsigned CompactQueue( QUEUE_TYPENAME* queue );
 
 unsigned PushNext( QUEUE_TYPENAME* queue, QUEUESLOT_TYPENAME fromItem );
-unsigned PushLast( QUEUE_TYPENAME* queue, QUEUESLOT_TYPENAME fromItem );
-
 unsigned PopNext( QUEUE_TYPENAME* queue, QUEUESLOT_TYPENAME* toItem );
+
+unsigned PushLast( QUEUE_TYPENAME* queue, QUEUESLOT_TYPENAME fromItem );
 unsigned PopLast( QUEUE_TYPENAME* queue, QUEUESLOT_TYPENAME* toItem );
 
 unsigned PeekNext( QUEUE_TYPENAME* queue, QUEUESLOT_TYPENAME* toItem );
+unsigned PeekLast( QUEUE_TYPENAME* queue, QUEUESLOT_TYPENAME* toItem );
+
 unsigned PeekNextAhead( QUEUE_TYPENAME* queue, unsigned byAmount,
   QUEUESLOT_TYPENAME* toItem );
-
-unsigned PeekLast( QUEUE_TYPENAME* queue, QUEUESLOT_TYPENAME* toItem );
 unsigned PeekLastFrom( QUEUE_TYPENAME* queue, unsigned amount,
   QUEUESLOT_TYPENAME* toItem );
 
@@ -84,11 +84,11 @@ unsigned PushNext( QUEUE_TYPENAME* queue, QUEUESLOT_TYPENAME fromItem ) {
   return 3;
 }
 
-unsigned PushLast( QUEUE_TYPENAME* queue, QUEUESLOT_TYPENAME fromItem ) {
+unsigned PopNext( QUEUE_TYPENAME* queue, QUEUESLOT_TYPENAME* toItem ) {
   return 3;
 }
 
-unsigned PopNext( QUEUE_TYPENAME* queue, QUEUESLOT_TYPENAME* toItem ) {
+unsigned PushLast( QUEUE_TYPENAME* queue, QUEUESLOT_TYPENAME fromItem ) {
   return 3;
 }
 
@@ -100,13 +100,13 @@ unsigned PeekNext( QUEUE_TYPENAME* queue, QUEUESLOT_TYPENAME* toItem ) {
   return 3;
 }
 
+unsigned PeekLast( QUEUE_TYPENAME* queue, QUEUESLOT_TYPENAME* toItem ) {
+  return 3;
+}
+
 unsigned PeekNextAhead( QUEUE_TYPENAME* queue, unsigned byAmount,
     QUEUESLOT_TYPENAME* toItem ) {
   return 4;
-}
-
-unsigned PeekLast( QUEUE_TYPENAME* queue, QUEUESLOT_TYPENAME* toItem ) {
-  return 3;
 }
 
 unsigned PeekLastFrom( QUEUE_TYPENAME* queue, unsigned amount,

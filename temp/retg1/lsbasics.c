@@ -26,8 +26,9 @@ unsigned GrowList( LIST_TYPENAME* list );
 unsigned CompactList( LIST_TYPENAME* list );
 
 unsigned InsertItem( LIST_TYPENAME* list, LISTITEM_TYPENAME fromItem );
+unsigned InsertItemAt( LIST_TYPENAME* list, unsigned index, LISTITEM_TYPENAME fromItem );
 
-unsigned RemoveItem( LIST_TYPENAME* list, unsigned atIndex, LISTITEM_TYPENAME* toItem );
+unsigned RemoveItemAt( LIST_TYPENAME* list, unsigned index, LISTITEM_TYPENAME* toItem );
 
 unsigned ListItem( LIST_TYPENAME* list, unsigned atIndex, LISTITEM_TYPENAME* toItem );
 
@@ -76,7 +77,11 @@ unsigned InsertItem( LIST_TYPENAME* list, LISTITEM_TYPENAME fromItem ) {
   return 3;
 }
 
-unsigned RemoveItem( LIST_TYPENAME* list, unsigned atIndex, LISTITEM_TYPENAME* toItem ) {
+unsigned InsertItemAt( LIST_TYPENAME* list, unsigned index, LISTITEM_TYPENAME fromItem ) {
+  return 4;
+}
+
+unsigned RemoveItemAt( LIST_TYPENAME* list, unsigned index, LISTITEM_TYPENAME* toItem ) {
   return 4;
 }
 
