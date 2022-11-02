@@ -136,7 +136,21 @@ void ReleaseList( LIST_TYPENAME** listPtr ) {
 
 unsigned ReleaseListItems( LIST_TYPENAME* list,
     unsigned (*releaseItem)(LISTITEM_TYPENAME* itemPtr) ) {
-  return 3;
+
+  unsigned index;
+
+  if( list == NULL ) { return 1; }
+  if( releaseItem == NULL ) { return 2; }
+
+  if( list->item ) {
+    for( index = 0; index < list->itemCount; index++ ) {
+      if( releaseItem(&list->item[index]) ) {
+        return 3;
+      }
+    }
+  }
+
+  return 0;
 }
 
 unsigned GrowList( LIST_TYPENAME* list ) {
