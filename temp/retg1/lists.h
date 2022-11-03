@@ -8,6 +8,8 @@
 ///TODO: Re-write boundary checks in GrowXYZ to succeed if reserve > 1
 ///TODO: Add functions to read a slot/item/etc value
 ///TODO: Merge Key Array into list as MAPARRAYxyz
+///TODO: Change PushSlot parameter fromItem to a pointer
+///TODO: Add a PushValue function to accept fromValue as a constant value
 
 /*
  *  Stack declarations

@@ -19,19 +19,22 @@ typedef struct LIST_TYPENAME {
 LIST_TYPENAME* CreateList();
 void ReleaseList( LIST_TYPENAME** listPtr );
 
-unsigned ReleaseListItems( LIST_TYPENAME* list,
+unsigned ReleaseAllItems( LIST_TYPENAME* list,
   unsigned (*releaseItem)(LISTITEM_TYPENAME* itemPtr) );
 
 unsigned GrowList( LIST_TYPENAME* list );
 unsigned CompactList( LIST_TYPENAME* list );
 
-unsigned InsertItem( LIST_TYPENAME* list, LISTITEM_TYPENAME sourceItem );
-unsigned InsertItemAt( LIST_TYPENAME* list, unsigned index, LISTITEM_TYPENAME sourceItem );
+unsigned InsertValue( LIST_TYPENAME* list, LISTITEM_TYPENAME sourceValue );
+unsigned InsertValueAt( LIST_TYPENAME* list, unsigned index, LISTITEM_TYPENAME sourceValue );
+
+unsigned InsertItem( LIST_TYPENAME* list, LISTITEM_TYPENAME* sourceItem );
+unsigned InsertItemAt( LIST_TYPENAME* list, unsigned index, LISTITEM_TYPENAME* sourceItem );
 
 unsigned RemoveItemAt( LIST_TYPENAME* list, unsigned index, LISTITEM_TYPENAME* destItem );
 
-unsigned ReadItem( LIST_TYPENAME* list, unsigned atIndex, LISTITEM_TYPENAME* destItem );
-unsigned WriteItem( LIST_TYPENAME* list, unsigned atIndex, const LISTITEM_TYPENAME* sourceItem );
+unsigned CopyItem( LIST_TYPENAME* list, unsigned atIndex, LISTITEM_TYPENAME* destItem );
+unsigned UpdateItem( LIST_TYPENAME* list, unsigned atIndex, const LISTITEM_TYPENAME* sourceItem );
 
 unsigned FindItem( LIST_TYPENAME* list, unsigned byValue, LISTITEM_TYPENAME* destItem );
 
@@ -88,9 +91,9 @@ int main( int argc, char** argv ) {
 
   DumpList( list, 1 );
 
-  result = InsertItem(list, 1234);
+  result = InsertValue(list, 1234);
   if( result ) {
-    printf( "Error in InsertItem[%u]: list(%p) items(%p) reserveCount(%u) itemCount(%u)\n",
+    printf( "Error in InsertValue[%u]: list(%p) items(%p) reserveCount(%u) itemCount(%u)\n",
       result, list, list ? list->item: NULL, list ? list->reserveCount : 0,
       list ? list->itemCount : 0 );
     exit(1);
@@ -108,9 +111,9 @@ int main( int argc, char** argv ) {
 
   DumpList( list, 3 );
 
-  result = InsertItem(list, 2345);
+  result = InsertValue(list, 2345);
   if( result ) {
-    printf( "Error in InsertItem[%u]: list(%p) items(%p) reserveCount(%u) itemCount(%u)\n",
+    printf( "Error in InsertValue[%u]: list(%p) items(%p) reserveCount(%u) itemCount(%u)\n",
       result, list, list ? list->item: NULL, list ? list->reserveCount : 0,
       list ? list->itemCount : 0 );
     exit(1);
@@ -162,7 +165,7 @@ void ReleaseList( LIST_TYPENAME** listPtr ) {
   }
 }
 
-unsigned ReleaseListItems( LIST_TYPENAME* list,
+unsigned ReleaseAllItems( LIST_TYPENAME* list,
     unsigned (*releaseItem)(LISTITEM_TYPENAME* itemPtr) ) {
 
   unsigned index;
@@ -206,48 +209,6 @@ unsigned GrowList( LIST_TYPENAME* list ) {
   return 0;
 }
 
-/*
-#define IMPLEMENT_COMPACTSTACK( STACKSLOT_TYPENAME, STACK_TYPENAME, FUNCNAME )\
-unsigned FUNCNAME( STACK_TYPENAME* stack ) {\
-  STACKSLOT_TYPENAME* newSlots = NULL;\
-  unsigned newTop;\
-  unsigned newBottom;\
-  \
-  if( (stack == NULL) || (stack->top < stack->bottom) ) { return 1; }\
-  \
-  newTop = stack->top - stack->bottom;\
-  newBottom = 0;\
-  \
-  if( newTop > newBottom ) {\
-    if( stack->slot ) {\
-      memmove( &stack->slot[0], &stack->slot[stack->bottom],\
-        stack->bottom * sizeof(STACKSLOT_TYPENAME) );\
-    }\
-    \
-    newSlots = realloc(stack->slot, newTop * sizeof(STACKSLOT_TYPENAME));\
-    if( newSlots == NULL ) {\
-      return 2;\
-    }\
-    \
-    stack->slot = newSlots;\
-    stack->top = newTop;\
-    stack->bottom = newBottom;\
-    \
-    return 0;\
-  }\
-  \
-  if( stack->slot ) {\
-    free( stack->slot );\
-    stack->slot = NULL;\
-  }\
-  \
-  stack->top = 0;\
-  stack->bottom = 0;\
-  \
-  return 0;\
-}
-*/
-
 unsigned CompactList( LIST_TYPENAME* list ) {
   LISTITEM_TYPENAME* tmpItems = NULL;
   unsigned newReserveCount;
@@ -283,7 +244,7 @@ unsigned CompactList( LIST_TYPENAME* list ) {
   return 0;
 }
 
-unsigned InsertItem( LIST_TYPENAME* list, LISTITEM_TYPENAME sourceItem ) {
+unsigned InsertValue( LIST_TYPENAME* list, LISTITEM_TYPENAME sourceValue ) {
   if( list == NULL ) { return 1; }
 
   if( GrowList(list) ) {
@@ -292,20 +253,78 @@ unsigned InsertItem( LIST_TYPENAME* list, LISTITEM_TYPENAME sourceItem ) {
 
   if( list->item == NULL ) { return 4; }
 
-  list->item[list->itemCount++] = sourceItem;
+  list->item[list->itemCount++] = sourceValue;
 
   return 0;
 }
 
-unsigned InsertItemAt( LIST_TYPENAME* list, unsigned index, LISTITEM_TYPENAME sourceItem ) {
-  return 4;
+unsigned InsertValueAt( LIST_TYPENAME* list, unsigned index, LISTITEM_TYPENAME sourceValue ) {
+  if( list == NULL ) { return 1; }
+  if( index > list->itemCount ) { return 2; }
+
+  if( GrowList(list) ) {
+    return 4;
+  }
+
+  if( list->item == NULL ) { return 5; }
+
+  if( index < list->itemCount ) {
+    memcpy( &list->item[index + 1], &list->item[index],
+        (list->itemCount - index) * sizeof(LISTITEM_TYPENAME) );
+  }
+
+  list->item[index] = sourceValue;
+  list->itemCount++;
+
+  return 0;
+}
+
+unsigned InsertItem( LIST_TYPENAME* list, LISTITEM_TYPENAME* sourceItem ) {
+  if( list == NULL ) { return 1; }
+  if( sourceItem == NULL ) { return 2; }
+
+  if( GrowList(list) ) {
+    return 3;
+  }
+
+  if( list->item == NULL ) { return 4; }
+
+  list->item[list->itemCount++] = *sourceItem;
+
+  return 0;
+}
+
+unsigned InsertItemAt( LIST_TYPENAME* list, unsigned index, LISTITEM_TYPENAME* sourceItem ) {
+  if( list == NULL ) { return 1; }
+  if( index > list->itemCount ) { return 2; }
+  if( sourceItem == NULL ) { return 3; }
+
+  if( GrowList(list) ) {
+    return 4;
+  }
+
+  if( list->item == NULL ) { return 5; }
+
+  if( index < list->itemCount ) {
+    memcpy( &list->item[index + 1], &list->item[index],
+        (list->itemCount - index) * sizeof(LISTITEM_TYPENAME) );
+  }
+
+  list->item[index] = *sourceItem;
+  list->itemCount++;
+
+  return 0;
 }
 
 unsigned RemoveItemAt( LIST_TYPENAME* list, unsigned index, LISTITEM_TYPENAME* destItem ) {
   return 4;
 }
 
-unsigned ListItem( LIST_TYPENAME* list, unsigned atIndex, LISTITEM_TYPENAME* destItem ) {
+unsigned CopyItem( LIST_TYPENAME* list, unsigned atIndex, LISTITEM_TYPENAME* destItem ) {
+  return 4;
+}
+
+unsigned UpdateItem( LIST_TYPENAME* list, unsigned atIndex, const LISTITEM_TYPENAME* sourceItem ) {
   return 4;
 }
 
