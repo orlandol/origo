@@ -52,9 +52,7 @@ void DumpList( LIST_TYPENAME* sourceList, unsigned marker ) {
       marker, list, list ? list->item : NULL, list ? list->reserveCount : 0,
       list ? list->itemCount : 0 );
 
-  if( (sourceList == NULL) ||
-    (sourceList->reserveCount == sourceList->itemCount) ) {
-
+  if( (sourceList == NULL) || (sourceList->itemCount == 0) ) {
     printf( "  List empty.\n" );
     goto Done;
   }
@@ -80,6 +78,16 @@ int main( int argc, char** argv ) {
 
   DumpList( list, 0 );
 
+  result = CompactList(list);
+  if( result ) {
+    printf( "Error in CompactList[%u]: list(%p) item(%p) reserveCount(%u) itemCount(%u)\n",
+      result, list, list ? list->item: NULL, list ? list->reserveCount : 0,
+      list ? list->itemCount : 0 );
+    exit(1);
+  }
+
+  DumpList( list, 1 );
+
   result = InsertItem(list, 1234);
   if( result ) {
     printf( "Error in InsertItem[%u]: list(%p) items(%p) reserveCount(%u) itemCount(%u)\n",
@@ -88,7 +96,17 @@ int main( int argc, char** argv ) {
     exit(1);
   }
 
-  DumpList( list, 1 );
+  DumpList( list, 2 );
+
+  result = CompactList(list);
+  if( result ) {
+    printf( "Error in CompactList[%u]: list(%p) item(%p) reserveCount(%u) itemCount(%u)\n",
+      result, list, list ? list->item: NULL, list ? list->reserveCount : 0,
+      list ? list->itemCount : 0 );
+    exit(1);
+  }
+
+  DumpList( list, 3 );
 
   result = InsertItem(list, 2345);
   if( result ) {
@@ -98,7 +116,17 @@ int main( int argc, char** argv ) {
     exit(1);
   }
 
-  DumpList( list, 2 );
+  DumpList( list, 4 );
+
+  result = CompactList(list);
+  if( result ) {
+    printf( "Error in CompactList[%u]: list(%p) item(%p) reserveCount(%u) itemCount(%u)\n",
+      result, list, list ? list->item: NULL, list ? list->reserveCount : 0,
+      list ? list->itemCount : 0 );
+    exit(1);
+  }
+
+  DumpList( list, 5 );
 
   Cleanup();
 
@@ -178,8 +206,81 @@ unsigned GrowList( LIST_TYPENAME* list ) {
   return 0;
 }
 
+/*
+#define IMPLEMENT_COMPACTSTACK( STACKSLOT_TYPENAME, STACK_TYPENAME, FUNCNAME )\
+unsigned FUNCNAME( STACK_TYPENAME* stack ) {\
+  STACKSLOT_TYPENAME* newSlots = NULL;\
+  unsigned newTop;\
+  unsigned newBottom;\
+  \
+  if( (stack == NULL) || (stack->top < stack->bottom) ) { return 1; }\
+  \
+  newTop = stack->top - stack->bottom;\
+  newBottom = 0;\
+  \
+  if( newTop > newBottom ) {\
+    if( stack->slot ) {\
+      memmove( &stack->slot[0], &stack->slot[stack->bottom],\
+        stack->bottom * sizeof(STACKSLOT_TYPENAME) );\
+    }\
+    \
+    newSlots = realloc(stack->slot, newTop * sizeof(STACKSLOT_TYPENAME));\
+    if( newSlots == NULL ) {\
+      return 2;\
+    }\
+    \
+    stack->slot = newSlots;\
+    stack->top = newTop;\
+    stack->bottom = newBottom;\
+    \
+    return 0;\
+  }\
+  \
+  if( stack->slot ) {\
+    free( stack->slot );\
+    stack->slot = NULL;\
+  }\
+  \
+  stack->top = 0;\
+  stack->bottom = 0;\
+  \
+  return 0;\
+}
+*/
+
 unsigned CompactList( LIST_TYPENAME* list ) {
-  return 2;
+  LISTITEM_TYPENAME* tmpItems = NULL;
+  unsigned newReserveCount;
+
+  if( (list == NULL) ||
+      (list->reserveCount < list->itemCount) ) {
+    return 1;
+  }
+
+  newReserveCount = list->itemCount;
+
+  if( list->reserveCount > list->itemCount ) {
+    tmpItems = realloc(list->item,newReserveCount *
+        sizeof(LISTITEM_TYPENAME));
+    if( tmpItems == NULL ) {
+      return 2;
+    }
+
+    list->item = tmpItems;
+    list->reserveCount = newReserveCount;
+
+    return 0;
+  }
+
+  if( list->item ) {
+    free( list->item );
+    list->item = NULL;
+  }
+
+  list->reserveCount = 0;
+  list->itemCount = 0;
+
+  return 0;
 }
 
 unsigned InsertItem( LIST_TYPENAME* list, LISTITEM_TYPENAME sourceItem ) {
