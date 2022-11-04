@@ -31,7 +31,9 @@ unsigned InsertValueAt( LIST_TYPENAME* list, unsigned index, LISTITEM_TYPENAME s
 unsigned InsertItem( LIST_TYPENAME* list, LISTITEM_TYPENAME* sourceItem );
 unsigned InsertItemAt( LIST_TYPENAME* list, unsigned index, LISTITEM_TYPENAME* sourceItem );
 
-unsigned RemoveItemAt( LIST_TYPENAME* list, unsigned index, LISTITEM_TYPENAME* destItem );
+unsigned RemoveItemAt( LIST_TYPENAME* list, unsigned index,
+    LISTITEM_TYPENAME* destItem,
+    unsigned (*releaseItem)(LISTITEM_TYPENAME* itemPtr) );
 
 unsigned CopyItem( LIST_TYPENAME* list, unsigned atIndex, LISTITEM_TYPENAME* destItem );
 unsigned UpdateItem( LIST_TYPENAME* list, unsigned atIndex, const LISTITEM_TYPENAME* sourceItem );
@@ -74,6 +76,7 @@ Done:
 
 int main( int argc, char** argv ) {
   unsigned result;
+  unsigned value;
 
   atexit( Cleanup );
 
@@ -91,7 +94,7 @@ int main( int argc, char** argv ) {
 
   DumpList( list, 1 );
 
-  result = InsertValue(list, 1234);
+  result = InsertValue(list, 12);
   if( result ) {
     printf( "Error in InsertValue[%u]: list(%p) items(%p) reserveCount(%u) itemCount(%u)\n",
       result, list, list ? list->item: NULL, list ? list->reserveCount : 0,
@@ -111,7 +114,18 @@ int main( int argc, char** argv ) {
 
   DumpList( list, 3 );
 
-  result = InsertValue(list, 2345);
+  value = 23;
+  result = InsertItem(list, &value);
+  if( result ) {
+    printf( "Error in InsertItem[%u]: list(%p) items(%p) reserveCount(%u) itemCount(%u)\n",
+      result, list, list ? list->item: NULL, list ? list->reserveCount : 0,
+      list ? list->itemCount : 0 );
+    exit(1);
+  }
+
+  DumpList( list, 4 );
+
+  result = InsertValue(list, 45);
   if( result ) {
     printf( "Error in InsertValue[%u]: list(%p) items(%p) reserveCount(%u) itemCount(%u)\n",
       result, list, list ? list->item: NULL, list ? list->reserveCount : 0,
@@ -119,7 +133,7 @@ int main( int argc, char** argv ) {
     exit(1);
   }
 
-  DumpList( list, 4 );
+  DumpList( list, 5 );
 
   result = CompactList(list);
   if( result ) {
@@ -129,7 +143,100 @@ int main( int argc, char** argv ) {
     exit(1);
   }
 
-  DumpList( list, 5 );
+  DumpList( list, 6 );
+
+  result = InsertValueAt(list, 0, 123);
+  if( result ) {
+    printf( "Error in InsertValueAt[%u]: list(%p) items(%p) reserveCount(%u) itemCount(%u)\n",
+      result, list, list ? list->item: NULL, list ? list->reserveCount : 0,
+      list ? list->itemCount : 0 );
+    exit(1);
+  }
+
+  DumpList( list, 7 );
+
+  result = CompactList(list);
+  if( result ) {
+    printf( "Error in CompactList[%u]: list(%p) item(%p) reserveCount(%u) itemCount(%u)\n",
+      result, list, list ? list->item: NULL, list ? list->reserveCount : 0,
+      list ? list->itemCount : 0 );
+    exit(1);
+  }
+
+  DumpList( list, 8 );
+
+  result = InsertValueAt(list, list->itemCount / 2, 234);
+  if( result ) {
+    printf( "Error in InsertValueAt[%u]: list(%p) items(%p) reserveCount(%u) itemCount(%u)\n",
+      result, list, list ? list->item: NULL, list ? list->reserveCount : 0,
+      list ? list->itemCount : 0 );
+    exit(1);
+  }
+
+  DumpList( list, 9 );
+
+  result = InsertValueAt(list, list->itemCount, 345);
+  if( result ) {
+    printf( "Error in InsertValueAt[%u]: list(%p) items(%p) reserveCount(%u) itemCount(%u)\n",
+      result, list, list ? list->item: NULL, list ? list->reserveCount : 0,
+      list ? list->itemCount : 0 );
+    exit(1);
+  }
+
+  DumpList( list, 10 );
+
+  value = 1234;
+  result = InsertItemAt(list, 0, &value);
+  if( result ) {
+    printf( "Error in InsertItemAt[%u]: list(%p) items(%p) reserveCount(%u) itemCount(%u)\n",
+      result, list, list ? list->item: NULL, list ? list->reserveCount : 0,
+      list ? list->itemCount : 0 );
+    exit(1);
+  }
+
+  DumpList( list, 11 );
+
+  value = 2345;
+  result = InsertItemAt(list, list->itemCount / 2, &value);
+  if( result ) {
+    printf( "Error in InsertItemAt[%u]: list(%p) items(%p) reserveCount(%u) itemCount(%u)\n",
+      result, list, list ? list->item: NULL, list ? list->reserveCount : 0,
+      list ? list->itemCount : 0 );
+    exit(1);
+  }
+
+  DumpList( list, 12 );
+
+  result = CompactList(list);
+  if( result ) {
+    printf( "Error in CompactList[%u]: list(%p) item(%p) reserveCount(%u) itemCount(%u)\n",
+      result, list, list ? list->item: NULL, list ? list->reserveCount : 0,
+      list ? list->itemCount : 0 );
+    exit(1);
+  }
+
+  DumpList( list, 13 );
+
+  value = 3456;
+  result = InsertItemAt(list, list->itemCount, &value);
+  if( result ) {
+    printf( "Error in InsertItemAt[%u]: list(%p) items(%p) reserveCount(%u) itemCount(%u)\n",
+      result, list, list ? list->item: NULL, list ? list->reserveCount : 0,
+      list ? list->itemCount : 0 );
+    exit(1);
+  }
+
+  DumpList( list, 14 );
+
+  result = CompactList(list);
+  if( result ) {
+    printf( "Error in CompactList[%u]: list(%p) item(%p) reserveCount(%u) itemCount(%u)\n",
+      result, list, list ? list->item: NULL, list ? list->reserveCount : 0,
+      list ? list->itemCount : 0 );
+    exit(1);
+  }
+
+  DumpList( list, 15 );
 
   Cleanup();
 
@@ -316,7 +423,9 @@ unsigned InsertItemAt( LIST_TYPENAME* list, unsigned index, LISTITEM_TYPENAME* s
   return 0;
 }
 
-unsigned RemoveItemAt( LIST_TYPENAME* list, unsigned index, LISTITEM_TYPENAME* destItem ) {
+unsigned RemoveItemAt( LIST_TYPENAME* list, unsigned index,
+    LISTITEM_TYPENAME* destItem,
+    unsigned (*releaseItem)(LISTITEM_TYPENAME* itemPtr) ) {
   return 4;
 }
 
