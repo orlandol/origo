@@ -1,0 +1,37 @@
+
+copyright "Copyright (C) 1995-2023 Orlando Llanes"
+versionstr "0.1 Alpha"
+version 0.1.1
+
+extension .ret
+
+ident = _azAZ{,09};
+
+parse = 'program' rootname:ident
+  {top_level_declaration}
+  run_declaration
+  {top_level_declaration}
+  closeall:;
+
+top_level_declaration =
+  enum_declaration;
+
+enum_declaration = 'enum' [typespec] enumname:ident
+  {enum_field:ident {',' enumalias:ident} ['=' const:expression]}
+  'end';
+
+run_declaration = 'run'
+  {local_var_declaration}
+  {statement}
+  'end';
+
+statement = 
+  label_statement;
+
+label_statement =
+  label:ident ':';
+
+attribute label:ident
+  $1 = readIdent
+  declareLabel $1
+end
